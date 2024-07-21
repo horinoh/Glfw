@@ -1,0 +1,3 @@
+option('VK', type : 'string', value : '', description : 'Vulkan SDK')
+option('GLFW', type : 'string', value : '', description : 'GLFW SDK')
+option('GLM', type : 'string', value : '', description : 'GLM SDK')
