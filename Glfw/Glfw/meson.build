@@ -4,21 +4,19 @@ project('Glfw', 'cpp',
 
 # setup の引数として指定する
 GLFW = get_option('GLFW')
-VK = get_option('VK')
 GLM = get_option('GLM')
 
 # 追加のインクルード
 Inc = [ 
         include_directories(GLFW / 'include'),
-        include_directories(VK / 'Include'),
         include_directories(GLM),
 ]
 
 # 追加のライブラリ
 Compiler = meson.get_compiler('cpp')
 Lib = [
+        dependency('vulkan'),
         Compiler.find_library('glfw3dll', dirs : GLFW / 'lib-vc2022'),
-        Compiler.find_library('vulkan-1', dirs : VK / 'Lib'),
 ]
 
 executable('Glfw',
@@ -26,3 +24,8 @@ executable('Glfw',
            install : true,
            include_directories : Inc,
            dependencies : Lib)
+
+# GLSL 
+foreach i : [ 'Glfw.vert', 'Glfw.frag' ]
+        run_command('glslangValidator', '-V', i, '-o', 'build' / i + '.spv', '--target-env', 'vulkan1.3', '-g', '-Od')
+endforeach
