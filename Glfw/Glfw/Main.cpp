@@ -5,6 +5,8 @@
 #include <array>
 #include <algorithm>
 #include <filesystem>
+#include <bitset>
+#include <map>
 
 #include <Vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
@@ -168,43 +170,91 @@ int main()
 		}
 	}
 
-	//!< キューファミリプロパティ (Queue family property)
-	std::vector<VkQueueFamilyProperties> QueueFamilyProperties;
-	{
-		uint32_t Count = 0;
-		vkGetPhysicalDeviceQueueFamilyProperties(SelectedPhysicalDevice, &Count, nullptr);
-		QueueFamilyProperties.resize(Count);
-		vkGetPhysicalDeviceQueueFamilyProperties(SelectedPhysicalDevice, &Count, std::data(QueueFamilyProperties));
-	}
-
-	//!< デバイス (Device)
+	//!< デバイス、キュー (Device, Queue)
 	VkDevice Device = VK_NULL_HANDLE;
+	//!< キューとファミリインデックス
+	using QueueAndFamilyIndex = std::pair<VkQueue, uint32_t>;
+	QueueAndFamilyIndex GraphicsQueue({ VK_NULL_HANDLE, (std::numeric_limits<uint32_t>::max)() });
+	QueueAndFamilyIndex PresentQueue({ VK_NULL_HANDLE, (std::numeric_limits<uint32_t>::max)() });
 	{
-		const std::array Priorities = { 0.0f };
-		const std::array DQCIs = {
-			VkDeviceQueueCreateInfo({
-				.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+		//!< キュー情報取得
+		using FamilyIndexAndPriorities = std::map<uint32_t, std::vector<float>>;
+		FamilyIndexAndPriorities FIAP;
+		uint32_t GraphicsIndexInFamily;
+		uint32_t PresentIndexInFamily;
+		{
+			std::vector<VkQueueFamilyProperties> QFPs;
+			uint32_t Count = 0;
+			vkGetPhysicalDeviceQueueFamilyProperties(SelectedPhysicalDevice, &Count, nullptr);
+			QFPs.resize(Count);
+			vkGetPhysicalDeviceQueueFamilyProperties(SelectedPhysicalDevice, &Count, std::data(QFPs));
+
+			//!< 機能を持つキューファミリインデックスを立てる
+			std::bitset<32> GraphicsMask;
+			std::bitset<32> PresentMask;
+			for (auto i = 0; i < std::size(QFPs); ++i) {
+				const auto& QFP = QFPs[i];
+				if (VK_QUEUE_GRAPHICS_BIT & QFP.queueFlags) {
+					GraphicsMask.set(i);
+				}
+				auto HasPresent = VK_FALSE;
+				VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfaceSupportKHR(SelectedPhysicalDevice, i, Surface, &HasPresent));
+				if (HasPresent) {
+					PresentMask.set(i);
+				}
+			}
+
+			//!< ここでは機能を持つ最初のファミリインデックスを採用する
+			GraphicsQueue.second = [&]() {
+				for (uint32_t i = 0; i < std::size(GraphicsMask); ++i) { if (GraphicsMask.test(i)) { return i; } } 
+				return (std::numeric_limits<uint32_t>::max)(); 
+			}();
+			PresentQueue.second = [&]() {
+				for (uint32_t i = 0; i < std::size(PresentMask); ++i) { if (PresentMask.test(i)) { return i; } }
+				return (std::numeric_limits<uint32_t>::max)();
+			}();
+
+			//!< (キューファミリインデックス毎に) プライオリティを追加、ファミリ内でのインデックスは一旦覚えておく
+			GraphicsIndexInFamily = static_cast<uint32_t>(std::size(FIAP[GraphicsQueue.second]));
+			FIAP[GraphicsQueue.second].emplace_back(0.5f);
+			PresentIndexInFamily = static_cast<uint32_t>(std::size(FIAP[PresentQueue.second]));
+			FIAP[PresentQueue.second].emplace_back(0.5f);
+		}
+
+		//!< デバイス作成
+		{
+			std::vector<VkDeviceQueueCreateInfo> DQCIs;
+			for (auto i : FIAP) {
+				DQCIs.emplace_back(VkDeviceQueueCreateInfo({
+									.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+									.pNext = nullptr,
+									.flags = 0,
+									.queueFamilyIndex = i.first,
+									.queueCount = static_cast<uint32_t>(std::size(i.second)), .pQueuePriorities = std::data(i.second)
+									}) );
+			}
+			const std::array Extensions = {
+				VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+			};
+			VkPhysicalDeviceFeatures PDF;
+			vkGetPhysicalDeviceFeatures(SelectedPhysicalDevice, &PDF);
+			const VkDeviceCreateInfo DCI = {
+				.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
 				.pNext = nullptr,
 				.flags = 0,
-				.queueFamilyIndex = static_cast<uint32_t>(0),
-				.queueCount = static_cast<uint32_t>(std::size(Priorities)), .pQueuePriorities = std::data(Priorities)
-			}) 
-		};
-		const std::array Extensions = {
-			VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-		};
-		VkPhysicalDeviceFeatures PDF;
-		vkGetPhysicalDeviceFeatures(SelectedPhysicalDevice, &PDF);
-		const VkDeviceCreateInfo DCI = {
-			.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-			.pNext = nullptr,
-			.flags = 0,
-			.queueCreateInfoCount = static_cast<uint32_t>(std::size(DQCIs)), .pQueueCreateInfos = std::data(DQCIs),
-			.enabledLayerCount = 0, .ppEnabledLayerNames = nullptr,
-			.enabledExtensionCount = static_cast<uint32_t>(std::size(Extensions)), .ppEnabledExtensionNames = std::data(Extensions),
-			.pEnabledFeatures = &PDF
-		};
-		VERIFY_SUCCEEDED(vkCreateDevice(SelectedPhysicalDevice, &DCI, nullptr, &Device));
+				.queueCreateInfoCount = static_cast<uint32_t>(std::size(DQCIs)), .pQueueCreateInfos = std::data(DQCIs),
+				.enabledLayerCount = 0, .ppEnabledLayerNames = nullptr,
+				.enabledExtensionCount = static_cast<uint32_t>(std::size(Extensions)), .ppEnabledExtensionNames = std::data(Extensions),
+				.pEnabledFeatures = &PDF
+			};
+			VERIFY_SUCCEEDED(vkCreateDevice(SelectedPhysicalDevice, &DCI, nullptr, &Device));
+		}
+
+		//!< デバイス作成後に、キューファミリインデックスとファミリ内でのインデックスから、キューを取得
+		{
+			vkGetDeviceQueue(Device, GraphicsQueue.second, GraphicsIndexInFamily, &GraphicsQueue.first);
+			vkGetDeviceQueue(Device, PresentQueue.second, PresentIndexInFamily, &PresentQueue.first);
+		}
 	}
 	//!< フェンス (Fence)
 	VkFence Fence = VK_NULL_HANDLE;
@@ -230,6 +280,7 @@ int main()
 	VkSwapchainKHR Swapchain = VK_NULL_HANDLE;
 	VkExtent2D SurfaceExtent2D;
 	std::vector<VkImageView> ImageViews;
+	uint32_t SwapchainImageIndex = 0;
 	{
 		VkSurfaceCapabilitiesKHR SC;
 		VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(SelectedPhysicalDevice, Surface, &SC));
@@ -554,14 +605,101 @@ int main()
 			VERIFY_SUCCEEDED(vkCreateFramebuffer(Device, &FCI, nullptr, &Framebuffers.emplace_back()));
 		}
 	}
-	
+
+	//!< ビューポート
+	const std::array Viewports = {
+		VkViewport({
+			.x = 0.0f, .y = static_cast<float>(SurfaceExtent2D.height),
+			.width = static_cast<float>(SurfaceExtent2D.width), .height = -static_cast<float>(SurfaceExtent2D.height),
+			.minDepth = 0.0f, .maxDepth = 1.0f
+		})
+	};
+	const std::array ScissorRects = {
+		VkRect2D({.offset = VkOffset2D({.x = 0, .y = 0 }), .extent = VkExtent2D({.width = SurfaceExtent2D.width, .height = SurfaceExtent2D.height }) }),
+	};
+
 	//!< コマンド作成
 	{
+		for (auto i = 0; i < 1; ++i) {
+			const auto FB = Framebuffers[i];
+			const auto CB = CommandBuffers[i];
+			constexpr VkCommandBufferBeginInfo CBBI = {
+				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+				.pNext = nullptr,
+				.flags = 0,
+				.pInheritanceInfo = nullptr
+			};
+			VERIFY_SUCCEEDED(vkBeginCommandBuffer(CB, &CBBI)); {
+				constexpr std::array CVs = { VkClearValue({.color = { 0.529411793f, 0.807843208f, 0.921568692f, 1.0f } }) };
+				const VkRenderPassBeginInfo RPBI = {
+					.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+					.pNext = nullptr,
+					.renderPass = RenderPass,
+					.framebuffer = FB,
+					.renderArea = VkRect2D({.offset = VkOffset2D({.x = 0, .y = 0 }), .extent = SurfaceExtent2D }),
+					.clearValueCount = static_cast<uint32_t>(size(CVs)), .pClearValues = data(CVs)
+				};
+				vkCmdBeginRenderPass(CB, &RPBI, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS); {
+					vkCmdSetViewport(CB, 0, static_cast<uint32_t>(std::size(Viewports)), std::data(Viewports));
+					vkCmdSetScissor(CB, 0, static_cast<uint32_t>(std::size(ScissorRects)), std::data(ScissorRects));
+
+					vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, Pipeline);
+
+					//const std::array VBs = { VertexBuffer.Buffer };
+					//const std::array Offsets = { VkDeviceSize(0) };
+					//vkCmdBindVertexBuffers(CB, 0, static_cast<uint32_t>(std::size(VBs)), std::data(VBs), data(Offsets));
+					//vkCmdBindIndexBuffer(CB, IndexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
+					//vkCmdDrawIndexedIndirect(CB, IndirectBuffer.Buffer, 0, 1, 0);
+				} vkCmdEndRenderPass(CB);
+			} VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
+		}
 	}
 
 	//!< ループ (Loop)
 	while (!glfwWindowShouldClose(Window)) {
 		glfwPollEvents();
+
+		//!< フェンス待ち (Wait for fence)
+		{
+			const std::array Fences = { Fence };
+			VERIFY_SUCCEEDED(vkWaitForFences(Device, static_cast<uint32_t>(std::size(Fences)), std::data(Fences), VK_TRUE, (std::numeric_limits<uint64_t>::max)()));
+			vkResetFences(Device, static_cast<uint32_t>(std::size(Fences)), std::data(Fences));
+		}
+
+		VERIFY_SUCCEEDED(vkAcquireNextImageKHR(Device, Swapchain, (std::numeric_limits<uint64_t>::max)(), NextImageAcquiredSemaphore, VK_NULL_HANDLE, &SwapchainImageIndex));
+
+		//!< サブミット (Submit)
+		{
+			const std::array WaitSems = { NextImageAcquiredSemaphore };
+			const std::array WaitStages = { VkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT) };
+			const std::array CBs = { CommandBuffers[SwapchainImageIndex], };
+			const std::array SigSems = { RenderFinishedSemaphore };
+			const std::array SIs = {
+				VkSubmitInfo({
+					.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+					.pNext = nullptr,
+					.waitSemaphoreCount = static_cast<uint32_t>(std::size(WaitSems)), .pWaitSemaphores = std::data(WaitSems), .pWaitDstStageMask = std::data(WaitStages), 
+					.commandBufferCount = static_cast<uint32_t>(std::size(CBs)), .pCommandBuffers = std::data(CBs),
+					.signalSemaphoreCount = static_cast<uint32_t>(std::size(SigSems)), .pSignalSemaphores = std::data(SigSems)
+				}),
+			};
+			VERIFY_SUCCEEDED(vkQueueSubmit(GraphicsQueue.first, static_cast<uint32_t>(std::size(SIs)), std::data(SIs), Fence));
+		}
+
+		//!< プレゼンテーション (Present)
+		{
+			const std::array WaitSems = { RenderFinishedSemaphore };
+			const std::array Swapchains = { Swapchain };
+			const std::array ImageIndices = { SwapchainImageIndex };
+			const VkPresentInfoKHR PI = {
+				.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+				.pNext = nullptr,
+				.waitSemaphoreCount = static_cast<uint32_t>(std::size(WaitSems)), .pWaitSemaphores = std::data(WaitSems),
+				.swapchainCount = static_cast<uint32_t>(std::size(Swapchains)), .pSwapchains = std::data(Swapchains), .pImageIndices = std::data(ImageIndices),
+				.pResults = nullptr
+			};
+			VERIFY_SUCCEEDED(vkQueuePresentKHR(PresentQueue.first, &PI));
+		}
 	}
 	
 	//!< VK 後片付け (Terminate)
