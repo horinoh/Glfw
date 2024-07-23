@@ -45,7 +45,7 @@
         ~~~
     - ここでは以下のように生成した (環境変数 VK_SDK_PATH, GLFW_SDK_PATH は設定してある前提)
         ~~~
-        $meson setup build --reconfigure -DVK=%VK_SDK_PATH% -DGLFW=%GLFW_SDK_PATH% -DGLM=..\..\glm
+        $meson setup build --reconfigure -DGLFW=%GLFW_SDK_PATH% -DGLM=..\..\glm
         ~~~
 - ビルド
     ~~~
