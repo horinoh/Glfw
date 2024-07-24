@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <bitset>
 #include <map>
+#include <numeric>
 
 #include <Vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
@@ -111,13 +112,14 @@ int main()
 			"VK_LAYER_KHRONOS_validation",
 		};
 		std::vector<const char*> Extensions = {
-	#ifdef _DEBUG
+#ifdef _DEBUG
 			VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 			VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME,
-	#endif
+#endif
 		};
-		//!< エクステンション (glfw がプラットフォーム毎の違いを吸収してくれる) (Extensions)
+		//!< エクステンション (Extensions)
 		uint32_t ExtCount = 0;
+		//!< glfwGetRequiredInstanceExtensions がプラットフォーム毎の違いを吸収してくれる
 		const auto Exts = glfwGetRequiredInstanceExtensions(&ExtCount);
 		for (uint32_t i = 0; i < ExtCount; ++i) {
 			std::cout << "Add Extension : " << Exts[i] << std::endl;
@@ -133,8 +135,32 @@ int main()
 		};
 		VERIFY_SUCCEEDED(vkCreateInstance(&ICI, nullptr, &Instance));
 	}
+	//!< デバッグ (Debug)
+#ifdef _DEBUG
+	VkDebugUtilsMessengerEXT DebugUtilsMessenger = VK_NULL_HANDLE;
+	auto vkCreateDebugUtilsMessenger = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(Instance, "vkCreateDebugUtilsMessengerEXT")); 
+	auto vkDestroyDebugUtilsMessenger = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(Instance, "vkDestroyDebugUtilsMessengerEXT")); 
+	{
+		constexpr VkDebugUtilsMessengerCreateInfoEXT DUMCI = {
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+			.pNext = nullptr,
+			.flags = 0,
+			.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+			.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT,
+			.pfnUserCallback = [](VkDebugUtilsMessageSeverityFlagBitsEXT DUMSFB, [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT DUMTF, [[maybe_unused]] const VkDebugUtilsMessengerCallbackDataEXT* DUMCD, [[maybe_unused]] void* UserData) {
+				if (DUMSFB >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+					std::cerr << DUMCD->pMessage << std::endl;
+					return VK_TRUE;
+				}
+				return VK_FALSE;
+			},
+			.pUserData = nullptr
+		};
+		VERIFY_SUCCEEDED(vkCreateDebugUtilsMessenger(Instance, &DUMCI, nullptr, &DebugUtilsMessenger));
+	}
+#endif
 
-	//!< 物理デバイス (GPU) (Physical device)
+	//!< 物理デバイス (Physical device) (GPU)
 	std::vector<VkPhysicalDevice> PhysicalDevices;
 	VkPhysicalDevice SelectedPhysicalDevice;
 	VkPhysicalDeviceMemoryProperties PhysicalDeviceMemoryProperties;
@@ -143,23 +169,46 @@ int main()
 		VERIFY_SUCCEEDED(vkEnumeratePhysicalDevices(Instance, &Count, nullptr));
 		PhysicalDevices.resize(Count);
 		VERIFY_SUCCEEDED(vkEnumeratePhysicalDevices(Instance, &Count, std::data(PhysicalDevices)));
-		SelectedPhysicalDevice = PhysicalDevices[0];
+
+		//!< ここでは最大メモリの物理デバイスを採用する
+		SelectedPhysicalDevice = *std::ranges::max_element(PhysicalDevices, [](const auto& lhs, const auto& rhs) {
+			VkPhysicalDeviceMemoryProperties MemPropL, MemPropR;
+			vkGetPhysicalDeviceMemoryProperties(lhs, &MemPropL);
+			vkGetPhysicalDeviceMemoryProperties(rhs, &MemPropR);
+			const auto MemTotalL = std::accumulate(std::data(MemPropL.memoryHeaps), &MemPropL.memoryHeaps[MemPropL.memoryHeapCount], VkDeviceSize(0), [](auto Sum, const auto& rhs) { return Sum + rhs.size; });
+			const auto MemTotalR = std::accumulate(std::data(MemPropR.memoryHeaps), &MemPropR.memoryHeaps[MemPropR.memoryHeapCount], VkDeviceSize(0), [](auto Sum, const auto& rhs) { return Sum + rhs.size; });
+			return MemTotalL < MemTotalR;
+		});
 
 		vkGetPhysicalDeviceMemoryProperties(SelectedPhysicalDevice, &PhysicalDeviceMemoryProperties);
+
+#ifdef _DEBUG
+		VkPhysicalDeviceProperties PDP;
+		vkGetPhysicalDeviceProperties(SelectedPhysicalDevice, &PDP);
+		std::cout << PDP.deviceName << "is selected" << std::endl;
+#endif
 	}
 
-	//!< サーフェス (glfw がプラットフォーム毎の違いを吸収してくれる) (Surface)
+	//!< サーフェス (Surface)
 	VkSurfaceKHR Surface = VK_NULL_HANDLE;
 	VkSurfaceFormatKHR SelectedSurfaceFormat;
 	VkPresentModeKHR SelectedPresentMode;
 	{
 		{
+			//!< glfwCreateWindowSurface がプラットフォーム毎の違いを吸収してくれる
 			VERIFY_SUCCEEDED(glfwCreateWindowSurface(Instance, Window, nullptr, &Surface));
 			uint32_t Count = 0;
 			VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfaceFormatsKHR(SelectedPhysicalDevice, Surface, &Count, nullptr));
 			std::vector<VkSurfaceFormatKHR> SFs(Count);
 			VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfaceFormatsKHR(SelectedPhysicalDevice, Surface, &Count, std::data(SFs)));
-			SelectedSurfaceFormat = SFs[0];
+
+			//!< ここでは最初に見つかった FORMAT_UNDEFINED でないものを採用する
+			SelectedSurfaceFormat = *std::ranges::find_if(SFs, [](const auto& rhs) {
+				if (VK_FORMAT_UNDEFINED != rhs.format) {
+					return true;
+				} 
+				return false;
+			});
 		}
 		{
 			uint32_t Count;
@@ -167,6 +216,15 @@ int main()
 			std::vector<VkPresentModeKHR> PMs(Count);
 			VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfacePresentModesKHR(SelectedPhysicalDevice, Surface, &Count, std::data(PMs)));
 			SelectedPresentMode = PMs[0];
+
+			//!< MAILBOX がサポートされるなら採用する
+			auto It = std::ranges::find(PMs, VK_PRESENT_MODE_MAILBOX_KHR);
+			if (It == std::end(PMs)) {
+				//!< 見つからない場合は FIFO (FIFO は必ずサポートされる)
+				It = std::ranges::find(PMs, VK_PRESENT_MODE_FIFO_KHR);
+			}
+
+			SelectedPresentMode = *It;
 		}
 	}
 
@@ -177,7 +235,7 @@ int main()
 	QueueAndFamilyIndex GraphicsQueue({ VK_NULL_HANDLE, (std::numeric_limits<uint32_t>::max)() });
 	QueueAndFamilyIndex PresentQueue({ VK_NULL_HANDLE, (std::numeric_limits<uint32_t>::max)() });
 	{
-		//!< キュー情報取得
+		//!< デバイス作成前に、キュー情報取得
 		using FamilyIndexAndPriorities = std::map<uint32_t, std::vector<float>>;
 		FamilyIndexAndPriorities FIAP;
 		uint32_t GraphicsIndexInFamily;
@@ -206,11 +264,19 @@ int main()
 
 			//!< ここでは機能を持つ最初のファミリインデックスを採用する
 			GraphicsQueue.second = [&]() {
-				for (uint32_t i = 0; i < std::size(GraphicsMask); ++i) { if (GraphicsMask.test(i)) { return i; } } 
+				for (uint32_t i = 0; i < std::size(GraphicsMask); ++i) { 
+					if (GraphicsMask.test(i)) { 
+						return i;
+					} 
+				} 
 				return (std::numeric_limits<uint32_t>::max)(); 
 			}();
 			PresentQueue.second = [&]() {
-				for (uint32_t i = 0; i < std::size(PresentMask); ++i) { if (PresentMask.test(i)) { return i; } }
+				for (uint32_t i = 0; i < std::size(PresentMask); ++i) { 
+					if (PresentMask.test(i)) { 
+						return i;
+					} 
+				}
 				return (std::numeric_limits<uint32_t>::max)();
 			}();
 
@@ -224,7 +290,7 @@ int main()
 		//!< デバイス作成
 		{
 			std::vector<VkDeviceQueueCreateInfo> DQCIs;
-			for (auto i : FIAP) {
+			for (const auto& i : FIAP) {
 				DQCIs.emplace_back(VkDeviceQueueCreateInfo({
 									.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
 									.pNext = nullptr,
@@ -289,20 +355,24 @@ int main()
 		glfwGetFramebufferSize(Window, &FBWidth, &FBHeight);
 		SurfaceExtent2D = 0xffffffff != SC.currentExtent.width ? SC.currentExtent : VkExtent2D({ .width = (std::clamp)(static_cast<uint32_t>(FBWidth), SC.maxImageExtent.width, SC.minImageExtent.width), .height = (std::clamp)(static_cast<uint32_t>(FBHeight), SC.minImageExtent.height, SC.minImageExtent.height) });
 
+		std::vector<uint32_t> QueueFamilyIndices;
+		if (GraphicsQueue.second != PresentQueue.second) {
+			QueueFamilyIndices.emplace_back(GraphicsQueue.second);
+			QueueFamilyIndices.emplace_back(PresentQueue.second);
+		}
+
 		const VkSwapchainCreateInfoKHR SCI = {
 			.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
 			.pNext = nullptr,
 			.flags = 0,
 			.surface = Surface,
-			.minImageCount = 3,
+			.minImageCount = (std::min)(SC.minImageCount + 1, 0 == SC.maxImageCount ? (std::numeric_limits<uint32_t>::max)() : SC.maxImageCount),
 			.imageFormat = SelectedSurfaceFormat.format, .imageColorSpace = SelectedSurfaceFormat.colorSpace,
 			.imageExtent = SurfaceExtent2D,
 			.imageArrayLayers = 1,
 			.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-			//.imageSharingMode = empty(QueueFamilyIndices) ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT,
-			.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
-			//.queueFamilyIndexCount = static_cast<uint32_t>(size(QueueFamilyIndices)), .pQueueFamilyIndices = data(QueueFamilyIndices),
-			.queueFamilyIndexCount = 1, .pQueueFamilyIndices = 0,
+			.imageSharingMode = std::empty(QueueFamilyIndices) ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT,
+			.queueFamilyIndexCount = static_cast<uint32_t>(std::size(QueueFamilyIndices)), .pQueueFamilyIndices = std::data(QueueFamilyIndices),
 			.preTransform = (VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR & SC.supportedTransforms) ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR : SC.currentTransform,
 			.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
 			.presentMode = SelectedPresentMode,
@@ -319,7 +389,7 @@ int main()
 			VERIFY_SUCCEEDED(vkGetSwapchainImagesKHR(Device, Swapchain, &Count, data(Images)));
 
 			ImageViews.reserve(std::size(Images));
-			for (auto i : Images) {
+			for (const auto& i : Images) {
 				const VkImageViewCreateInfo IVCI = {
 					.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 					.pNext = nullptr,
@@ -355,17 +425,117 @@ int main()
 		};
 		VERIFY_SUCCEEDED(vkAllocateCommandBuffers(Device, &CBAI, std::data(CommandBuffers)));
 	}
-	//!< ジオメトリ (Geometry)
-	{
-		const auto& CB = CommandBuffers[0];
-		const auto PDMP = PhysicalDeviceMemoryProperties;
 
+	auto GetMemoryTypeIndex = [&](const uint32_t TypeBits, const VkMemoryPropertyFlags MPF) {
+		for (uint32_t i = 0; i < PhysicalDeviceMemoryProperties.memoryTypeCount; ++i) {
+			if (TypeBits & (1 << i)) {
+				if ((PhysicalDeviceMemoryProperties.memoryTypes[i].propertyFlags & MPF) == MPF) {
+					return i;
+				}
+			}
+		}
+		return (std::numeric_limits<uint32_t>::max)();
+	};
+	auto CreateBuffer = [&](VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBufferUsageFlags BUF, const VkMemoryPropertyFlagBits MPFB, const size_t Size, const void* Source = nullptr) {
+		constexpr std::array<uint32_t, 0> QFI = {};
+		const VkBufferCreateInfo BCI = {
+			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.size = Size,
+			.usage = BUF,
+			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+			.queueFamilyIndexCount = static_cast<uint32_t>(std::size(QFI)), .pQueueFamilyIndices = std::data(QFI)
+		};
+		VERIFY_SUCCEEDED(vkCreateBuffer(Device, &BCI, nullptr, Buffer));
+
+		VkMemoryRequirements MR;
+		vkGetBufferMemoryRequirements(Device, *Buffer, &MR);
+		const VkMemoryAllocateInfo MAI = {
+			.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+			.pNext = nullptr,
+			.allocationSize = MR.size,
+			.memoryTypeIndex = GetMemoryTypeIndex(MR.memoryTypeBits, MPFB)
+		};
+		VERIFY_SUCCEEDED(vkAllocateMemory(Device, &MAI, nullptr, DeviceMemory));
+		VERIFY_SUCCEEDED(vkBindBufferMemory(Device, *Buffer, *DeviceMemory, 0));
+
+		if(nullptr != Source) {
+			constexpr auto MapSize = VK_WHOLE_SIZE;
+			void* Data;
+			VERIFY_SUCCEEDED(vkMapMemory(Device, *DeviceMemory, 0, MapSize, static_cast<VkMemoryMapFlags>(0), &Data)); {
+				memcpy(Data, Source, Size);
+				//!< メモリコンテンツが変更されたことを明示的にドライバへ知らせる(vkMapMemory()した状態でやること)
+				if (!(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT & BUF)) {
+					const std::array MMRs = {
+						VkMappedMemoryRange({
+							.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+							.pNext = nullptr,
+							.memory = *DeviceMemory,
+							.offset = 0, .size = MapSize
+						}),
+					};
+					VERIFY_SUCCEEDED(vkFlushMappedMemoryRanges(Device, static_cast<uint32_t>(std::size(MMRs)), std::data(MMRs)));
+				}
+			} vkUnmapMemory(Device, *DeviceMemory);
+		}
+	};
+	auto CreateDeviceLocalBuffer = [&](VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBufferUsageFlags BUF, const size_t Size) {
+		CreateBuffer(Buffer, DeviceMemory, BUF, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, Size);
+	};
+	auto CreateHostVisibleBuffer = [&](VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBufferUsageFlags BUF, const size_t Size, const void* Source) {
+		CreateBuffer(Buffer, DeviceMemory, BUF, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, Size, Source);
+	};
+	//!< ジオメトリ (Geometry)
+	auto VertexBuffer = std::pair<VkBuffer, VkDeviceMemory>({ VK_NULL_HANDLE, VK_NULL_HANDLE });
+	auto IndexBuffer = std::pair<VkBuffer, VkDeviceMemory>({ VK_NULL_HANDLE, VK_NULL_HANDLE });
+	auto IndirectBuffer = std::pair<VkBuffer, VkDeviceMemory>({ VK_NULL_HANDLE, VK_NULL_HANDLE });
+	{
 		const std::array Vertices = {
 			std::pair<glm::vec3, glm::vec3>{{ 0.0f, 0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f}},
 			std::pair<glm::vec3, glm::vec3>{{ -0.5f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f}},
 			std::pair<glm::vec3, glm::vec3>{{ 0.5f, -0.5f, 0.0f }, {  0.0f, 0.0f, 1.0f}},
 		};
-		constexpr std::array Indices = { uint32_t(0), uint32_t(1), uint32_t(2) };
+		CreateDeviceLocalBuffer(&VertexBuffer.first, &VertexBuffer.second, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sizeof(Vertices));
+		auto VertexStagingBuffer = std::pair<VkBuffer, VkDeviceMemory>({ VK_NULL_HANDLE, VK_NULL_HANDLE });
+		CreateHostVisibleBuffer(&VertexStagingBuffer.first, &VertexStagingBuffer.second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(Vertices), std::data(Vertices));
+		
+		constexpr std::array Indices = {
+			uint32_t(0), uint32_t(1), uint32_t(2) 
+		};
+		CreateDeviceLocalBuffer(&IndexBuffer.first, &IndexBuffer.second, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sizeof(Indices));
+		auto IndexStagingBuffer = std::pair<VkBuffer, VkDeviceMemory>({ VK_NULL_HANDLE, VK_NULL_HANDLE });
+		CreateHostVisibleBuffer(&IndexStagingBuffer.first, &IndexStagingBuffer.second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(Indices), std::data(Indices));
+
+		constexpr VkDrawIndexedIndirectCommand DIIC = { 
+			.indexCount = static_cast<uint32_t>(std::size(Indices)), 
+			.instanceCount = 1,
+			.firstIndex = 0, 
+			.vertexOffset = 0, 
+			.firstInstance = 0
+		};
+		CreateDeviceLocalBuffer(&IndirectBuffer.first, &IndirectBuffer.second, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sizeof(DIIC));
+		auto IndirectStagingBuffer = std::pair<VkBuffer, VkDeviceMemory>({ VK_NULL_HANDLE, VK_NULL_HANDLE });
+		CreateHostVisibleBuffer(&IndirectStagingBuffer.first, &IndirectStagingBuffer.second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(DIIC), &DIIC);
+	
+		if (VK_NULL_HANDLE != VertexStagingBuffer.second) {
+			vkFreeMemory(Device, VertexStagingBuffer.second, nullptr);
+		}
+		if (VK_NULL_HANDLE != VertexStagingBuffer.first) {
+			vkDestroyBuffer(Device, VertexStagingBuffer.first, nullptr);
+		}
+		if (VK_NULL_HANDLE != IndexStagingBuffer.second) {
+			vkFreeMemory(Device, IndexStagingBuffer.second, nullptr);
+		}
+		if (VK_NULL_HANDLE != IndexStagingBuffer.first) {
+			vkDestroyBuffer(Device, IndexStagingBuffer.first, nullptr);
+		}
+		if (VK_NULL_HANDLE != IndirectStagingBuffer.second) {
+			vkFreeMemory(Device, IndirectStagingBuffer.second, nullptr);
+		}
+		if (VK_NULL_HANDLE != IndirectStagingBuffer.first) {
+			vkDestroyBuffer(Device, IndirectStagingBuffer.first, nullptr);
+		}
 	}
 
 	//!< パイプラインレイアウト (Pipeline layout)
@@ -583,7 +753,7 @@ int main()
 		};
 		VERIFY_SUCCEEDED(vkCreateGraphicsPipelines(Device, VK_NULL_HANDLE, static_cast<uint32_t>(std::size(GPCIs)), std::data(GPCIs), nullptr, &Pipeline));
 
-		for (auto i : SMs) {
+		for (const auto i : SMs) {
 			vkDestroyShaderModule(Device, i, nullptr);
 		}
 	}
@@ -620,7 +790,7 @@ int main()
 
 	//!< コマンド作成
 	{
-		for (auto i = 0; i < 1; ++i) {
+		for (auto i = 0; i < std::size(ImageViews); ++i) {
 			const auto FB = Framebuffers[i];
 			const auto CB = CommandBuffers[i];
 			constexpr VkCommandBufferBeginInfo CBBI = {
@@ -630,6 +800,11 @@ int main()
 				.pInheritanceInfo = nullptr
 			};
 			VERIFY_SUCCEEDED(vkBeginCommandBuffer(CB, &CBBI)); {
+				vkCmdSetViewport(CB, 0, static_cast<uint32_t>(std::size(Viewports)), std::data(Viewports));
+				vkCmdSetScissor(CB, 0, static_cast<uint32_t>(std::size(ScissorRects)), std::data(ScissorRects));
+
+				vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, Pipeline);
+
 				constexpr std::array CVs = { VkClearValue({.color = { 0.529411793f, 0.807843208f, 0.921568692f, 1.0f } }) };
 				const VkRenderPassBeginInfo RPBI = {
 					.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -640,16 +815,11 @@ int main()
 					.clearValueCount = static_cast<uint32_t>(size(CVs)), .pClearValues = data(CVs)
 				};
 				vkCmdBeginRenderPass(CB, &RPBI, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS); {
-					vkCmdSetViewport(CB, 0, static_cast<uint32_t>(std::size(Viewports)), std::data(Viewports));
-					vkCmdSetScissor(CB, 0, static_cast<uint32_t>(std::size(ScissorRects)), std::data(ScissorRects));
-
-					vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, Pipeline);
-
-					//const std::array VBs = { VertexBuffer.Buffer };
+					//const std::array VBs = { VertexBuffer.first };
 					//const std::array Offsets = { VkDeviceSize(0) };
 					//vkCmdBindVertexBuffers(CB, 0, static_cast<uint32_t>(std::size(VBs)), std::data(VBs), data(Offsets));
-					//vkCmdBindIndexBuffer(CB, IndexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
-					//vkCmdDrawIndexedIndirect(CB, IndirectBuffer.Buffer, 0, 1, 0);
+					//vkCmdBindIndexBuffer(CB, IndexBuffer.first, 0, VK_INDEX_TYPE_UINT32);
+					//vkCmdDrawIndexedIndirect(CB, IndirectBuffer.first, 0, 1, 0);
 				} vkCmdEndRenderPass(CB);
 			} VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
 		}
@@ -702,6 +872,11 @@ int main()
 		}
 	}
 	
+	//!< 処理の完了を待つ (Wait for idle)
+	if (VK_NULL_HANDLE != Device) {
+		VERIFY_SUCCEEDED(vkDeviceWaitIdle(Device));
+	}
+
 	//!< VK 後片付け (Terminate)
 	if (VK_NULL_HANDLE != Instance) {
 		for (auto i : Framebuffers) {
@@ -715,6 +890,24 @@ int main()
 		}
 		if (VK_NULL_HANDLE != PipelineLayout) {
 			vkDestroyPipelineLayout(Device, PipelineLayout, nullptr);
+		}
+		if (VK_NULL_HANDLE != IndirectBuffer.second) {
+			vkFreeMemory(Device, IndirectBuffer.second, nullptr);
+		}
+		if (VK_NULL_HANDLE != IndirectBuffer.first) {
+			vkDestroyBuffer(Device, IndirectBuffer.first, nullptr);
+		}
+		if (VK_NULL_HANDLE != IndexBuffer.second) {
+			vkFreeMemory(Device, IndexBuffer.second, nullptr);
+		}
+		if (VK_NULL_HANDLE != IndexBuffer.first) {
+			vkDestroyBuffer(Device, IndexBuffer.first, nullptr);
+		}
+		if (VK_NULL_HANDLE != VertexBuffer.second) {
+			vkFreeMemory(Device, VertexBuffer.second, nullptr);
+		}
+		if (VK_NULL_HANDLE != VertexBuffer.first) {
+			vkDestroyBuffer(Device, VertexBuffer.first, nullptr);
 		}
 		if (VK_NULL_HANDLE != CommandPool) {
 			vkDestroyCommandPool(Device, CommandPool, nullptr);
@@ -740,7 +933,14 @@ int main()
 		if (VK_NULL_HANDLE != Surface) {
 			vkDestroySurfaceKHR(Instance, Surface, nullptr);
 		}
-		vkDestroyInstance(Instance, nullptr);
+#ifdef _DEBUG
+		if (VK_NULL_HANDLE != DebugUtilsMessenger) {
+			vkDestroyDebugUtilsMessenger(Instance, DebugUtilsMessenger, nullptr);
+		}
+#endif
+		if (VK_NULL_HANDLE != Instance) {
+			vkDestroyInstance(Instance, nullptr);
+		}
 	}
 
 	//!< GLFW 後片付け (Terminate)
