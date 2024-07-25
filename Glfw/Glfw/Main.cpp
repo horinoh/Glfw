@@ -578,6 +578,7 @@ int main()
 		} VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
 		//!< コピーコマンド発行 (Submit copy command)
 		{
+#if 0
 			const std::array<VkSemaphore, 0> WaitSems = {};
 			const std::array<VkPipelineStageFlags, 0> StageFlags = {};
 			const std::array CBs = { CB };
@@ -586,12 +587,35 @@ int main()
 				VkSubmitInfo({
 					.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
 					.pNext = nullptr,
-					.waitSemaphoreCount = static_cast<uint32_t>(size(WaitSems)), .pWaitSemaphores = data(WaitSems), .pWaitDstStageMask = data(StageFlags),
-					.commandBufferCount = static_cast<uint32_t>(size(CBs)), .pCommandBuffers = data(CBs),
-					.signalSemaphoreCount = static_cast<uint32_t>(size(SignalSems)), .pSignalSemaphores = data(SignalSems)
+					.waitSemaphoreCount = static_cast<uint32_t>(std::size(WaitSems)), .pWaitSemaphores = std::data(WaitSems), .pWaitDstStageMask = std::data(StageFlags),
+					.commandBufferCount = static_cast<uint32_t>(std::size(CBs)), .pCommandBuffers = std::data(CBs),
+					.signalSemaphoreCount = static_cast<uint32_t>(std::size(SignalSems)), .pSignalSemaphores = std::data(SignalSems)
 				})
 			};
 			VERIFY_SUCCEEDED(vkQueueSubmit(GraphicsQueue.first, static_cast<uint32_t>(std::size(SIs)), std::data(SIs), VK_NULL_HANDLE));
+#else
+			const std::array<VkSemaphoreSubmitInfo, 0> WaitSSIs = {};
+			const std::array CBSIs = {
+				VkCommandBufferSubmitInfo({ 
+					.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+					.pNext = nullptr, 
+					.commandBuffer = CB, 
+					.deviceMask = 0
+					})
+			};
+			const std::array<VkSemaphoreSubmitInfo, 0> SignalSSIs = {};
+			const std::array SIs = {
+				VkSubmitInfo2({
+					.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+					.pNext = nullptr,
+					.flags = 0,
+					.waitSemaphoreInfoCount = static_cast<uint32_t>(std::size(WaitSSIs)), .pWaitSemaphoreInfos = std::data(WaitSSIs),
+					.commandBufferInfoCount = static_cast<uint32_t>(std::size(CBSIs)), .pCommandBufferInfos = std::data(CBSIs),
+					.signalSemaphoreInfoCount = static_cast<uint32_t>(std::size(SignalSSIs)), .pSignalSemaphoreInfos = std::data(SignalSSIs)
+				})
+			};
+			VERIFY_SUCCEEDED(vkQueueSubmit2(GraphicsQueue.first, static_cast<uint32_t>(std::size(SIs)), std::data(SIs), VK_NULL_HANDLE));
+#endif
 			VERIFY_SUCCEEDED(vkQueueWaitIdle(GraphicsQueue.first));
 		}
 
@@ -918,9 +942,11 @@ int main()
 
 		//!< サブミット (Submit)
 		{
+			const auto& CB = CommandBuffers[SwapchainImageIndex];
+#if 1
 			const std::array WaitSems = { NextImageAcquiredSemaphore };
 			const std::array WaitStages = { VkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT) };
-			const std::array CBs = { CommandBuffers[SwapchainImageIndex], };
+			const std::array CBs = { CB };
 			const std::array SigSems = { RenderFinishedSemaphore };
 			const std::array SIs = {
 				VkSubmitInfo({
@@ -932,6 +958,47 @@ int main()
 				}),
 			};
 			VERIFY_SUCCEEDED(vkQueueSubmit(GraphicsQueue.first, static_cast<uint32_t>(std::size(SIs)), std::data(SIs), Fence));
+#else
+			const std::array WaitSSIs = {
+				VkSemaphoreSubmitInfo({
+					.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+					.pNext = nullptr,
+					.semaphore = NextImageAcquiredSemaphore,
+					.value = 0,
+					.stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+					.deviceIndex = 0 
+					}),
+			};
+			const std::array CBSIs = {
+				VkCommandBufferSubmitInfo({
+					.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+					.pNext = nullptr,
+					.commandBuffer = CB,
+					.deviceMask = 0
+					})
+			};
+			const std::array SignalSSIs = {
+				VkSemaphoreSubmitInfo({
+					.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+					.pNext = nullptr,
+					.semaphore = RenderFinishedSemaphore,
+					.value = 0,
+					.stageMask = VK_PIPELINE_STAGE_2_NONE,
+					.deviceIndex = 0
+					}), 
+			};
+			const std::array SIs = {
+				VkSubmitInfo2({
+					.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+					.pNext = nullptr,
+					.flags = 0,
+					.waitSemaphoreInfoCount = static_cast<uint32_t>(std::size(WaitSSIs)), .pWaitSemaphoreInfos = std::data(WaitSSIs),
+					.commandBufferInfoCount = static_cast<uint32_t>(std::size(CBSIs)), .pCommandBufferInfos = std::data(CBSIs),
+					.signalSemaphoreInfoCount = static_cast<uint32_t>(std::size(SignalSSIs)), .pSignalSemaphoreInfos = std::data(SignalSSIs)
+				})
+			};
+			VERIFY_SUCCEEDED(vkQueueSubmit2(GraphicsQueue.first, static_cast<uint32_t>(std::size(SIs)), std::data(SIs), VK_NULL_HANDLE));
+#endif
 		}
 
 		//!< プレゼンテーション (Present)
