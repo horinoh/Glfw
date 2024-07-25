@@ -135,11 +135,11 @@ int main()
 		};
 		VERIFY_SUCCEEDED(vkCreateInstance(&ICI, nullptr, &Instance));
 	}
-	//!< デバッグ (Debug)
+	//!< デバッグユーティリティ (Debug utils)
 #ifdef _DEBUG
 	VkDebugUtilsMessengerEXT DebugUtilsMessenger = VK_NULL_HANDLE;
-	auto vkCreateDebugUtilsMessenger = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(Instance, "vkCreateDebugUtilsMessengerEXT")); 
-	auto vkDestroyDebugUtilsMessenger = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(Instance, "vkDestroyDebugUtilsMessengerEXT")); 
+	auto vkCreateDebugUtilsMessenger = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(Instance, "vkCreateDebugUtilsMessengerEXT"));
+	auto vkDestroyDebugUtilsMessenger = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(Instance, "vkDestroyDebugUtilsMessengerEXT"));
 	{
 		constexpr VkDebugUtilsMessengerCreateInfoEXT DUMCI = {
 			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
@@ -170,7 +170,7 @@ int main()
 		PhysicalDevices.resize(Count);
 		VERIFY_SUCCEEDED(vkEnumeratePhysicalDevices(Instance, &Count, std::data(PhysicalDevices)));
 
-		//!< ここでは最大メモリの物理デバイスを採用する
+		//!< ここでは最大メモリの物理デバイスを採用する (Select max memory GPU here)
 		SelectedPhysicalDevice = *std::ranges::max_element(PhysicalDevices, [](const auto& lhs, const auto& rhs) {
 			VkPhysicalDeviceMemoryProperties MemPropL, MemPropR;
 			vkGetPhysicalDeviceMemoryProperties(lhs, &MemPropL);
@@ -178,7 +178,7 @@ int main()
 			const auto MemTotalL = std::accumulate(std::data(MemPropL.memoryHeaps), &MemPropL.memoryHeaps[MemPropL.memoryHeapCount], VkDeviceSize(0), [](auto Sum, const auto& rhs) { return Sum + rhs.size; });
 			const auto MemTotalR = std::accumulate(std::data(MemPropR.memoryHeaps), &MemPropR.memoryHeaps[MemPropR.memoryHeapCount], VkDeviceSize(0), [](auto Sum, const auto& rhs) { return Sum + rhs.size; });
 			return MemTotalL < MemTotalR;
-		});
+			});
 
 		vkGetPhysicalDeviceMemoryProperties(SelectedPhysicalDevice, &PhysicalDeviceMemoryProperties);
 
@@ -202,40 +202,38 @@ int main()
 			std::vector<VkSurfaceFormatKHR> SFs(Count);
 			VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfaceFormatsKHR(SelectedPhysicalDevice, Surface, &Count, std::data(SFs)));
 
-			//!< ここでは最初に見つかった FORMAT_UNDEFINED でないものを採用する
+			//!< ここでは最初に見つかった FORMAT_UNDEFINED でないものを採用する (Select first no FORMAT_UNDEFINED here)
 			SelectedSurfaceFormat = *std::ranges::find_if(SFs, [](const auto& rhs) {
 				if (VK_FORMAT_UNDEFINED != rhs.format) {
 					return true;
-				} 
+				}
 				return false;
-			});
+				});
 		}
 		{
 			uint32_t Count;
 			VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfacePresentModesKHR(SelectedPhysicalDevice, Surface, &Count, nullptr));
 			std::vector<VkPresentModeKHR> PMs(Count);
 			VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfacePresentModesKHR(SelectedPhysicalDevice, Surface, &Count, std::data(PMs)));
-			SelectedPresentMode = PMs[0];
 
-			//!< MAILBOX がサポートされるなら採用する
+			//!< MAILBOX がサポートされるなら採用する (Select if MAILBOX supported)
 			auto It = std::ranges::find(PMs, VK_PRESENT_MODE_MAILBOX_KHR);
 			if (It == std::end(PMs)) {
 				//!< 見つからない場合は FIFO (FIFO は必ずサポートされる)
 				It = std::ranges::find(PMs, VK_PRESENT_MODE_FIFO_KHR);
 			}
-
 			SelectedPresentMode = *It;
 		}
 	}
 
 	//!< デバイス、キュー (Device, Queue)
 	VkDevice Device = VK_NULL_HANDLE;
-	//!< キューとファミリインデックス
+	//!< キューとファミリインデックス (Queue and family index)
 	using QueueAndFamilyIndex = std::pair<VkQueue, uint32_t>;
 	QueueAndFamilyIndex GraphicsQueue({ VK_NULL_HANDLE, (std::numeric_limits<uint32_t>::max)() });
 	QueueAndFamilyIndex PresentQueue({ VK_NULL_HANDLE, (std::numeric_limits<uint32_t>::max)() });
 	{
-		//!< デバイス作成前に、キュー情報取得
+		//!< デバイス作成前に、キュー情報取得 (Before create device, get queue information)
 		using FamilyIndexAndPriorities = std::map<uint32_t, std::vector<float>>;
 		FamilyIndexAndPriorities FIAP;
 		uint32_t GraphicsIndexInFamily;
@@ -247,7 +245,7 @@ int main()
 			QFPs.resize(Count);
 			vkGetPhysicalDeviceQueueFamilyProperties(SelectedPhysicalDevice, &Count, std::data(QFPs));
 
-			//!< 機能を持つキューファミリインデックスを立てる
+			//!< 機能を持つキューファミリインデックスを立てる (If queue family index has function, set bit)
 			std::bitset<32> GraphicsMask;
 			std::bitset<32> PresentMask;
 			for (auto i = 0; i < std::size(QFPs); ++i) {
@@ -262,32 +260,32 @@ int main()
 				}
 			}
 
-			//!< ここでは機能を持つ最初のファミリインデックスを採用する
+			//!< ここでは機能を持つ最初のファミリインデックスを採用する (Select first family index, which has function)
 			GraphicsQueue.second = [&]() {
-				for (uint32_t i = 0; i < std::size(GraphicsMask); ++i) { 
-					if (GraphicsMask.test(i)) { 
+				for (uint32_t i = 0; i < std::size(GraphicsMask); ++i) {
+					if (GraphicsMask.test(i)) {
 						return i;
-					} 
-				} 
-				return (std::numeric_limits<uint32_t>::max)(); 
-			}();
-			PresentQueue.second = [&]() {
-				for (uint32_t i = 0; i < std::size(PresentMask); ++i) { 
-					if (PresentMask.test(i)) { 
-						return i;
-					} 
+					}
 				}
 				return (std::numeric_limits<uint32_t>::max)();
-			}();
+				}();
+			PresentQueue.second = [&]() {
+				for (uint32_t i = 0; i < std::size(PresentMask); ++i) {
+					if (PresentMask.test(i)) {
+						return i;
+					}
+				}
+				return (std::numeric_limits<uint32_t>::max)();
+				}();
 
-			//!< (キューファミリインデックス毎に) プライオリティを追加、ファミリ内でのインデックスは一旦覚えておく
+			//!< (キューファミリインデックス毎に) プライオリティを追加、ファミリ内でのインデックスは一旦覚えておく (For each queue family index, add priority)
 			GraphicsIndexInFamily = static_cast<uint32_t>(std::size(FIAP[GraphicsQueue.second]));
 			FIAP[GraphicsQueue.second].emplace_back(0.5f);
 			PresentIndexInFamily = static_cast<uint32_t>(std::size(FIAP[PresentQueue.second]));
 			FIAP[PresentQueue.second].emplace_back(0.5f);
 		}
 
-		//!< デバイス作成
+		//!< デバイス作成 (Create device)
 		{
 			std::vector<VkDeviceQueueCreateInfo> DQCIs;
 			for (const auto& i : FIAP) {
@@ -297,16 +295,22 @@ int main()
 									.flags = 0,
 									.queueFamilyIndex = i.first,
 									.queueCount = static_cast<uint32_t>(std::size(i.second)), .pQueuePriorities = std::data(i.second)
-									}) );
+					}));
 			}
 			const std::array Extensions = {
 				VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+			};
+			//!< Synchronization2 を有効にする (Enable synchronization2)
+			constexpr VkPhysicalDeviceSynchronization2Features PDS2 = {
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
+				.pNext = nullptr,
+				.synchronization2 = VK_TRUE
 			};
 			VkPhysicalDeviceFeatures PDF;
 			vkGetPhysicalDeviceFeatures(SelectedPhysicalDevice, &PDF);
 			const VkDeviceCreateInfo DCI = {
 				.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-				.pNext = nullptr,
+				.pNext = &PDS2,
 				.flags = 0,
 				.queueCreateInfoCount = static_cast<uint32_t>(std::size(DQCIs)), .pQueueCreateInfos = std::data(DQCIs),
 				.enabledLayerCount = 0, .ppEnabledLayerNames = nullptr,
@@ -316,7 +320,7 @@ int main()
 			VERIFY_SUCCEEDED(vkCreateDevice(SelectedPhysicalDevice, &DCI, nullptr, &Device));
 		}
 
-		//!< デバイス作成後に、キューファミリインデックスとファミリ内でのインデックスから、キューを取得
+		//!< デバイス作成後に、キューファミリインデックスとファミリ内でのインデックスから、キューを取得 (After ceate device, get queue from family index, index in family)
 		{
 			vkGetDeviceQueue(Device, GraphicsQueue.second, GraphicsIndexInFamily, &GraphicsQueue.first);
 			vkGetDeviceQueue(Device, PresentQueue.second, PresentIndexInFamily, &PresentQueue.first);
@@ -327,7 +331,7 @@ int main()
 	{
 		constexpr VkFenceCreateInfo FCI = {
 			.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-			.pNext = nullptr, 
+			.pNext = nullptr,
 			.flags = VK_FENCE_CREATE_SIGNALED_BIT
 		};
 		VERIFY_SUCCEEDED(vkCreateFence(Device, &FCI, nullptr, &Fence));
@@ -336,7 +340,7 @@ int main()
 	VkSemaphore NextImageAcquiredSemaphore = VK_NULL_HANDLE, RenderFinishedSemaphore = VK_NULL_HANDLE;
 	{
 		constexpr VkSemaphoreCreateInfo SCI = {
-			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, 
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
 			.pNext = nullptr, .flags = 0
 		};
 		VERIFY_SUCCEEDED(vkCreateSemaphore(Device, &SCI, nullptr, &NextImageAcquiredSemaphore));
@@ -366,6 +370,7 @@ int main()
 			.pNext = nullptr,
 			.flags = 0,
 			.surface = Surface,
+			//!< minImageCount + 1 を希望 (Want minImageCount + 1)
 			.minImageCount = (std::min)(SC.minImageCount + 1, 0 == SC.maxImageCount ? (std::numeric_limits<uint32_t>::max)() : SC.maxImageCount),
 			.imageFormat = SelectedSurfaceFormat.format, .imageColorSpace = SelectedSurfaceFormat.colorSpace,
 			.imageExtent = SurfaceExtent2D,
@@ -380,7 +385,7 @@ int main()
 			.oldSwapchain = VK_NULL_HANDLE
 		};
 		VERIFY_SUCCEEDED(vkCreateSwapchainKHR(Device, &SCI, nullptr, &Swapchain));
-		
+
 		//!< イメージビュー (Image views)
 		{
 			uint32_t Count;
@@ -406,13 +411,13 @@ int main()
 	}
 	//!< コマンドバッファ (Command buffer)
 	VkCommandPool CommandPool = VK_NULL_HANDLE;
-	std::array<VkCommandBuffer, 3> CommandBuffers;
+	std::vector<VkCommandBuffer> CommandBuffers(std::size(ImageViews));
 	{
 		const VkCommandPoolCreateInfo CPCI = {
 			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 			.pNext = nullptr,
 			.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-			.queueFamilyIndex = 0
+			.queueFamilyIndex = GraphicsQueue.second
 		};
 		VERIFY_SUCCEEDED(vkCreateCommandPool(Device, &CPCI, nullptr, &CommandPool));
 
@@ -435,7 +440,7 @@ int main()
 			}
 		}
 		return (std::numeric_limits<uint32_t>::max)();
-	};
+		};
 	auto CreateBuffer = [&](VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBufferUsageFlags BUF, const VkMemoryPropertyFlagBits MPFB, const size_t Size, const void* Source = nullptr) {
 		constexpr std::array<uint32_t, 0> QFI = {};
 		const VkBufferCreateInfo BCI = {
@@ -460,7 +465,7 @@ int main()
 		VERIFY_SUCCEEDED(vkAllocateMemory(Device, &MAI, nullptr, DeviceMemory));
 		VERIFY_SUCCEEDED(vkBindBufferMemory(Device, *Buffer, *DeviceMemory, 0));
 
-		if(nullptr != Source) {
+		if (nullptr != Source) {
 			constexpr auto MapSize = VK_WHOLE_SIZE;
 			void* Data;
 			VERIFY_SUCCEEDED(vkMapMemory(Device, *DeviceMemory, 0, MapSize, static_cast<VkMemoryMapFlags>(0), &Data)); {
@@ -479,18 +484,56 @@ int main()
 				}
 			} vkUnmapMemory(Device, *DeviceMemory);
 		}
-	};
+		};
 	auto CreateDeviceLocalBuffer = [&](VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBufferUsageFlags BUF, const size_t Size) {
 		CreateBuffer(Buffer, DeviceMemory, BUF, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, Size);
-	};
+		};
 	auto CreateHostVisibleBuffer = [&](VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBufferUsageFlags BUF, const size_t Size, const void* Source) {
 		CreateBuffer(Buffer, DeviceMemory, BUF, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, Size, Source);
-	};
+		};
+	auto BufferMemoryBarrier = [&](const VkCommandBuffer CB,
+		const VkBuffer Buffer,
+		const VkPipelineStageFlags SrcPSF, const VkPipelineStageFlags DstPSF,
+		const VkAccessFlags SrcAF, const VkAccessFlags DstAF) {
+			constexpr std::array<VkMemoryBarrier2, 0> MBs = {};
+			const std::array BMBs = {
+				VkBufferMemoryBarrier2({
+					.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+					.pNext = nullptr,
+					.srcStageMask = SrcPSF, .srcAccessMask = SrcAF, .dstStageMask = DstPSF, .dstAccessMask = DstAF,
+					.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+					.buffer = Buffer, .offset = 0, .size = VK_WHOLE_SIZE
+				}),
+			};
+			constexpr std::array<VkImageMemoryBarrier2, 0> IMBs = {};
+			const VkDependencyInfo DI = {
+				.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+				.pNext = nullptr,
+				.dependencyFlags = 0,
+				.memoryBarrierCount = static_cast<uint32_t>(std::size(MBs)), .pMemoryBarriers = std::data(MBs),
+				.bufferMemoryBarrierCount = static_cast<uint32_t>(std::size(BMBs)), .pBufferMemoryBarriers = std::data(BMBs),
+				.imageMemoryBarrierCount = static_cast<uint32_t>(std::size(IMBs)), .pImageMemoryBarriers = std::data(IMBs),
+			};
+			vkCmdPipelineBarrier2(CB, &DI);
+		};
+	auto PopulateCopyCommand = [&](const VkCommandBuffer CB, const VkBuffer Staging, const VkBuffer Buffer, const size_t Size, const VkAccessFlags AF, const VkPipelineStageFlagBits PSF) {
+		BufferMemoryBarrier(CB, Buffer,
+			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+			0, VK_ACCESS_MEMORY_WRITE_BIT);
+		{
+			const std::array BCs = { VkBufferCopy({.srcOffset = 0, .dstOffset = 0, .size = Size }), };
+			vkCmdCopyBuffer(CB, Staging, Buffer, static_cast<uint32_t>(std::size(BCs)), std::data(BCs));
+		}
+		BufferMemoryBarrier(CB, Buffer,
+			VK_PIPELINE_STAGE_TRANSFER_BIT, PSF,
+			VK_ACCESS_MEMORY_WRITE_BIT, AF);
+		};
 	//!< ジオメトリ (Geometry)
 	auto VertexBuffer = std::pair<VkBuffer, VkDeviceMemory>({ VK_NULL_HANDLE, VK_NULL_HANDLE });
 	auto IndexBuffer = std::pair<VkBuffer, VkDeviceMemory>({ VK_NULL_HANDLE, VK_NULL_HANDLE });
 	auto IndirectBuffer = std::pair<VkBuffer, VkDeviceMemory>({ VK_NULL_HANDLE, VK_NULL_HANDLE });
 	{
+		//!< バーテックスバッファ、ステージングの作成 (Create vertex buffer, staging)
 		const std::array Vertices = {
 			std::pair<glm::vec3, glm::vec3>{{ 0.0f, 0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f}},
 			std::pair<glm::vec3, glm::vec3>{{ -0.5f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f}},
@@ -500,6 +543,7 @@ int main()
 		auto VertexStagingBuffer = std::pair<VkBuffer, VkDeviceMemory>({ VK_NULL_HANDLE, VK_NULL_HANDLE });
 		CreateHostVisibleBuffer(&VertexStagingBuffer.first, &VertexStagingBuffer.second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(Vertices), std::data(Vertices));
 		
+		//!< インデックスバッファ、ステージングの作成 (Create index buffer, staging)
 		constexpr std::array Indices = {
 			uint32_t(0), uint32_t(1), uint32_t(2) 
 		};
@@ -507,6 +551,7 @@ int main()
 		auto IndexStagingBuffer = std::pair<VkBuffer, VkDeviceMemory>({ VK_NULL_HANDLE, VK_NULL_HANDLE });
 		CreateHostVisibleBuffer(&IndexStagingBuffer.first, &IndexStagingBuffer.second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(Indices), std::data(Indices));
 
+		//!< インダイレクトバッファ、ステージングの作成 (Create indirect buffer, staging)
 		constexpr VkDrawIndexedIndirectCommand DIIC = { 
 			.indexCount = static_cast<uint32_t>(std::size(Indices)), 
 			.instanceCount = 1,
@@ -518,6 +563,38 @@ int main()
 		auto IndirectStagingBuffer = std::pair<VkBuffer, VkDeviceMemory>({ VK_NULL_HANDLE, VK_NULL_HANDLE });
 		CreateHostVisibleBuffer(&IndirectStagingBuffer.first, &IndirectStagingBuffer.second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(DIIC), &DIIC);
 	
+		//!< コピーコマンド作成 (Populate copy command)
+		const auto& CB = CommandBuffers[0];
+		constexpr VkCommandBufferBeginInfo CBBI = { 
+			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, 
+			.pNext = nullptr, 
+			.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+			.pInheritanceInfo = nullptr
+		};
+		VERIFY_SUCCEEDED(vkBeginCommandBuffer(CB, &CBBI)); {
+			PopulateCopyCommand(CB, VertexStagingBuffer.first, VertexBuffer.first, sizeof(Vertices), VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
+			PopulateCopyCommand(CB, IndexStagingBuffer.first, IndexBuffer.first, sizeof(Indices), VK_ACCESS_INDEX_READ_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
+			PopulateCopyCommand(CB, IndirectStagingBuffer.first, IndirectBuffer.first, sizeof(DIIC), VK_ACCESS_INDIRECT_COMMAND_READ_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT);
+		} VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
+		//!< コピーコマンド発行 (Submit copy command)
+		{
+			const std::array<VkSemaphore, 0> WaitSems = {};
+			const std::array<VkPipelineStageFlags, 0> StageFlags = {};
+			const std::array CBs = { CB };
+			const std::array<VkSemaphore, 0> SignalSems = {};
+			const std::array SIs = {
+				VkSubmitInfo({
+					.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+					.pNext = nullptr,
+					.waitSemaphoreCount = static_cast<uint32_t>(size(WaitSems)), .pWaitSemaphores = data(WaitSems), .pWaitDstStageMask = data(StageFlags),
+					.commandBufferCount = static_cast<uint32_t>(size(CBs)), .pCommandBuffers = data(CBs),
+					.signalSemaphoreCount = static_cast<uint32_t>(size(SignalSems)), .pSignalSemaphores = data(SignalSems)
+				})
+			};
+			VERIFY_SUCCEEDED(vkQueueSubmit(GraphicsQueue.first, static_cast<uint32_t>(std::size(SIs)), std::data(SIs), VK_NULL_HANDLE));
+			VERIFY_SUCCEEDED(vkQueueWaitIdle(GraphicsQueue.first));
+		}
+
 		if (VK_NULL_HANDLE != VertexStagingBuffer.second) {
 			vkFreeMemory(Device, VertexStagingBuffer.second, nullptr);
 		}
@@ -759,6 +836,7 @@ int main()
 	}
 	//!< フレームバッファ (Frame buffer)
 	std::vector<VkFramebuffer> Framebuffers;
+	Framebuffers.reserve(std::size(ImageViews));
 	{
 		Framebuffers.reserve(std::size(ImageViews));
 		for (const auto& i : ImageViews) {
@@ -776,7 +854,7 @@ int main()
 		}
 	}
 
-	//!< ビューポート
+	//!< ビューポート、シザー (Viewport, scissor)
 	const std::array Viewports = {
 		VkViewport({
 			.x = 0.0f, .y = static_cast<float>(SurfaceExtent2D.height),
@@ -788,7 +866,7 @@ int main()
 		VkRect2D({.offset = VkOffset2D({.x = 0, .y = 0 }), .extent = VkExtent2D({.width = SurfaceExtent2D.width, .height = SurfaceExtent2D.height }) }),
 	};
 
-	//!< コマンド作成
+	//!< コマンド作成 (Populate command)
 	{
 		for (auto i = 0; i < std::size(ImageViews); ++i) {
 			const auto FB = Framebuffers[i];
@@ -814,12 +892,12 @@ int main()
 					.renderArea = VkRect2D({.offset = VkOffset2D({.x = 0, .y = 0 }), .extent = SurfaceExtent2D }),
 					.clearValueCount = static_cast<uint32_t>(size(CVs)), .pClearValues = data(CVs)
 				};
-				vkCmdBeginRenderPass(CB, &RPBI, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS); {
-					//const std::array VBs = { VertexBuffer.first };
-					//const std::array Offsets = { VkDeviceSize(0) };
-					//vkCmdBindVertexBuffers(CB, 0, static_cast<uint32_t>(std::size(VBs)), std::data(VBs), data(Offsets));
-					//vkCmdBindIndexBuffer(CB, IndexBuffer.first, 0, VK_INDEX_TYPE_UINT32);
-					//vkCmdDrawIndexedIndirect(CB, IndirectBuffer.first, 0, 1, 0);
+				vkCmdBeginRenderPass(CB, &RPBI, VK_SUBPASS_CONTENTS_INLINE); {
+					const std::array VBs = { VertexBuffer.first };
+					const std::array Offsets = { VkDeviceSize(0) };
+					vkCmdBindVertexBuffers(CB, 0, static_cast<uint32_t>(std::size(VBs)), std::data(VBs), std::data(Offsets));
+					vkCmdBindIndexBuffer(CB, IndexBuffer.first, 0, VK_INDEX_TYPE_UINT32);
+					vkCmdDrawIndexedIndirect(CB, IndirectBuffer.first, 0, 1, 0);
 				} vkCmdEndRenderPass(CB);
 			} VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
 		}
