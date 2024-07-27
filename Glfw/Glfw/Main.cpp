@@ -52,13 +52,6 @@ int main()
 		exit(EXIT_FAILURE);
 	}
 
-	//!< OpenGL コンテキストを作成しない (Not create OpenGL context)
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-#ifdef USE_BORDERLESS
-	//!< ボーダーレスにする場合 (Borderless)
-	glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
-#endif
-
 	//!< モニター列挙 (Enumerate monitors)
 	int MonitorCount;
 	const auto Monitors = glfwGetMonitors(&MonitorCount);
@@ -77,6 +70,12 @@ int main()
 		}
 	}
 
+	//!< OpenGL コンテキストを作成しない (Not create OpenGL context)
+	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+#ifdef USE_BORDERLESS
+	//!< ボーダーレスにする場合 (Borderless)
+	glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+#endif
 	//!< ウインドウ作成 (Create window)
 	//constexpr auto Width = 1280, Height = 720;
 	constexpr auto Width = 1920, Height = 1080;
@@ -85,14 +84,23 @@ int main()
 	const auto Window = glfwCreateWindow(Width, Height, "Title", glfwGetPrimaryMonitor(), nullptr);
 #else
 	const auto Window = glfwCreateWindow(Width, Height, "Title", nullptr, nullptr);
-#endif
-
-	//!< フレームバッファサイズ (ボーダーレスにするとウインドウサイズと同じになるはず) (Framebuffer size)
 	{
+		int WinLeft, WinTop, WinRight, WinBottom;
+		glfwGetWindowFrameSize(Window, &WinLeft, &WinTop, &WinRight, &WinBottom);
+		std::cout << "Window frame size (LTRB) = " << WinLeft << ", " << WinTop << ", " << WinRight << " ," << WinBottom << std::endl;
+
+		int WinX, WinY;
+		glfwGetWindowPos(Window, &WinX, &WinY);		
+		std::cout << "Window pos = " << WinX << ", " << WinY << std::endl;
+		int WinWidth, WinHeight;
+		glfwGetWindowSize(Window, &WinWidth, &WinHeight);
+		std::cout << "Window size = " << WinWidth << "x" << WinHeight << std::endl;
+
 		int FBWidth, GBHeight;
 		glfwGetFramebufferSize(Window, &FBWidth, &GBHeight);
-		std::cout << "Framebuffer = " << FBWidth << "x" << GBHeight << std::endl;
+		std::cout << "Framebuffer size = " << FBWidth << "x" << GBHeight << std::endl;
 	}
+#endif
 
 	//!< コールバック登録 (Register callbacks)
 	glfwSetErrorCallback(ErrorCallback);
@@ -326,7 +334,7 @@ int main()
 			vkGetDeviceQueue(Device, PresentQueue.second, PresentIndexInFamily, &PresentQueue.first);
 		}
 	}
-	//!< フェンス (Fence)
+	//!< フェンス (シグナル状態で作成) (Fence, create as signaled) CPU - GPU
 	VkFence Fence = VK_NULL_HANDLE;
 	{
 		constexpr VkFenceCreateInfo FCI = {
@@ -336,7 +344,7 @@ int main()
 		};
 		VERIFY_SUCCEEDED(vkCreateFence(Device, &FCI, nullptr, &Fence));
 	}
-	//!< セマフォ (Semaphore)
+	//!< セマフォ (Semaphore) GPU - GPU
 	VkSemaphore NextImageAcquiredSemaphore = VK_NULL_HANDLE, RenderFinishedSemaphore = VK_NULL_HANDLE;
 	{
 		constexpr VkSemaphoreCreateInfo SCI = {
@@ -931,18 +939,22 @@ int main()
 	while (!glfwWindowShouldClose(Window)) {
 		glfwPollEvents();
 
-		//!< フェンス待ち (Wait for fence)
+		//!< フェンス待ち、リセット (Wait for fence, reset) CPU - GPU
+		//!< (シグナル状態で作成しているので、初回フレームは待ちにならない)
 		{
 			const std::array Fences = { Fence };
 			VERIFY_SUCCEEDED(vkWaitForFences(Device, static_cast<uint32_t>(std::size(Fences)), std::data(Fences), VK_TRUE, (std::numeric_limits<uint64_t>::max)()));
 			vkResetFences(Device, static_cast<uint32_t>(std::size(Fences)), std::data(Fences));
 		}
 
+		//!< 次のイメージインデックスを取得、イメージが取得出来たらセマフォ(A) がシグナルされる (Acquire next image index, on acquire semaphore A will be signaled)
 		VERIFY_SUCCEEDED(vkAcquireNextImageKHR(Device, Swapchain, (std::numeric_limits<uint64_t>::max)(), NextImageAcquiredSemaphore, VK_NULL_HANDLE, &SwapchainImageIndex));
 
 		//!< サブミット (Submit)
 		{
 			const auto& CB = CommandBuffers[SwapchainImageIndex];
+			//!< セマフォ (A) がシグナル (次のイメージ取得) される迄待つ
+			//!< レンダリングが終わったらセマフォ (B) がシグナル (レンダリング完了) される
 #if 1
 			const std::array WaitSems = { NextImageAcquiredSemaphore };
 			const std::array WaitStages = { VkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT) };
@@ -957,6 +969,7 @@ int main()
 					.signalSemaphoreCount = static_cast<uint32_t>(std::size(SigSems)), .pSignalSemaphores = std::data(SigSems)
 				}),
 			};
+			//!< サブミットしたコマンドが完了したらフェンスがシグナルされる
 			VERIFY_SUCCEEDED(vkQueueSubmit(GraphicsQueue.first, static_cast<uint32_t>(std::size(SIs)), std::data(SIs), Fence));
 #else
 			const std::array WaitSSIs = {
@@ -997,12 +1010,14 @@ int main()
 					.signalSemaphoreInfoCount = static_cast<uint32_t>(std::size(SignalSSIs)), .pSignalSemaphoreInfos = std::data(SignalSSIs)
 				})
 			};
+			//!< サブミットしたコマンドが完了したらフェンスがシグナルされる
 			VERIFY_SUCCEEDED(vkQueueSubmit2(GraphicsQueue.first, static_cast<uint32_t>(std::size(SIs)), std::data(SIs), VK_NULL_HANDLE));
 #endif
 		}
 
 		//!< プレゼンテーション (Present)
 		{
+			//!< セマフォ (B) がシグナル (レンダリング完了) される迄待つ
 			const std::array WaitSems = { RenderFinishedSemaphore };
 			const std::array Swapchains = { Swapchain };
 			const std::array ImageIndices = { SwapchainImageIndex };
