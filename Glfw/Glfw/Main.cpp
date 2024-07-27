@@ -308,17 +308,99 @@ int main()
 			const std::array Extensions = {
 				VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 			};
-			//!< Synchronization2 を有効にする (Enable synchronization2)
-			constexpr VkPhysicalDeviceSynchronization2Features PDS2 = {
-				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
+#pragma region VULKAN_FEATURE
+			VkPhysicalDeviceVulkan11Features PDV11F = {
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
 				.pNext = nullptr,
-				.synchronization2 = VK_TRUE
+				.storageBuffer16BitAccess = VK_FALSE,
+				.uniformAndStorageBuffer16BitAccess = VK_FALSE,
+				.storagePushConstant16 = VK_FALSE,
+				.storageInputOutput16 = VK_FALSE,
+				.multiview = VK_FALSE,
+				.multiviewGeometryShader = VK_FALSE,
+				.multiviewTessellationShader = VK_FALSE,
+				.variablePointersStorageBuffer = VK_FALSE,
+				.variablePointers = VK_FALSE,
+				.protectedMemory = VK_FALSE,
+				.samplerYcbcrConversion = VK_FALSE,
+				.shaderDrawParameters = VK_FALSE,
 			};
+			VkPhysicalDeviceVulkan12Features PDV12F = {
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+				.pNext = &PDV11F,
+				.samplerMirrorClampToEdge = VK_FALSE,
+				.drawIndirectCount = VK_FALSE,
+				.storageBuffer8BitAccess = VK_FALSE,
+				.uniformAndStorageBuffer8BitAccess = VK_FALSE,
+				.storagePushConstant8 = VK_FALSE,
+				.shaderBufferInt64Atomics = VK_FALSE,
+				.shaderSharedInt64Atomics = VK_FALSE,
+				.shaderFloat16 = VK_FALSE,
+				.shaderInt8 = VK_FALSE,
+				.descriptorIndexing = VK_FALSE,
+				.shaderInputAttachmentArrayDynamicIndexing = VK_FALSE,
+				.shaderUniformTexelBufferArrayDynamicIndexing = VK_FALSE,
+				.shaderStorageTexelBufferArrayDynamicIndexing = VK_FALSE,
+				.shaderUniformBufferArrayNonUniformIndexing = VK_FALSE,
+				.shaderSampledImageArrayNonUniformIndexing = VK_FALSE,
+				.shaderStorageBufferArrayNonUniformIndexing = VK_FALSE,
+				.shaderStorageImageArrayNonUniformIndexing = VK_FALSE,
+				.shaderInputAttachmentArrayNonUniformIndexing = VK_FALSE,
+				.shaderUniformTexelBufferArrayNonUniformIndexing = VK_FALSE,
+				.shaderStorageTexelBufferArrayNonUniformIndexing = VK_FALSE,
+				.descriptorBindingUniformBufferUpdateAfterBind = VK_FALSE,
+				.descriptorBindingSampledImageUpdateAfterBind = VK_FALSE,
+				.descriptorBindingStorageImageUpdateAfterBind = VK_FALSE,
+				.descriptorBindingStorageBufferUpdateAfterBind = VK_FALSE,
+				.descriptorBindingUniformTexelBufferUpdateAfterBind = VK_FALSE,
+				.descriptorBindingStorageTexelBufferUpdateAfterBind = VK_FALSE,
+				.descriptorBindingUpdateUnusedWhilePending = VK_FALSE,
+				.descriptorBindingPartiallyBound = VK_FALSE,
+				.descriptorBindingVariableDescriptorCount = VK_FALSE,
+				.runtimeDescriptorArray = VK_FALSE,
+				.samplerFilterMinmax = VK_FALSE,
+				.scalarBlockLayout = VK_FALSE,
+				.imagelessFramebuffer = VK_FALSE,
+				.uniformBufferStandardLayout = VK_FALSE,
+				.shaderSubgroupExtendedTypes = VK_FALSE,
+				.separateDepthStencilLayouts = VK_FALSE,
+				.hostQueryReset = VK_FALSE,
+				.timelineSemaphore = VK_TRUE,
+				.bufferDeviceAddress = VK_FALSE,
+				.bufferDeviceAddressCaptureReplay = VK_FALSE,
+				.bufferDeviceAddressMultiDevice = VK_FALSE,
+				.vulkanMemoryModel = VK_FALSE,
+				.vulkanMemoryModelDeviceScope = VK_FALSE,
+				.vulkanMemoryModelAvailabilityVisibilityChains = VK_FALSE,
+				.shaderOutputViewportIndex = VK_FALSE,
+				.shaderOutputLayer = VK_FALSE,
+				.subgroupBroadcastDynamicId = VK_FALSE,
+			};
+			VkPhysicalDeviceVulkan13Features PDV13F = {
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+				.pNext = &PDV12F,
+				.robustImageAccess = VK_FALSE,
+				.inlineUniformBlock = VK_FALSE,
+				.descriptorBindingInlineUniformBlockUpdateAfterBind = VK_FALSE,
+				.pipelineCreationCacheControl = VK_FALSE,
+				.privateData = VK_FALSE,
+				.shaderDemoteToHelperInvocation = VK_FALSE,
+				.shaderTerminateInvocation = VK_FALSE,
+				.subgroupSizeControl = VK_FALSE,
+				.computeFullSubgroups = VK_FALSE,
+				.synchronization2 = VK_TRUE,
+				.textureCompressionASTC_HDR = VK_FALSE,
+				.shaderZeroInitializeWorkgroupMemory = VK_FALSE,
+				.dynamicRendering = VK_FALSE,
+				.shaderIntegerDotProduct = VK_FALSE,
+				.maintenance4 = VK_FALSE,
+			};
+#pragma endregion
 			VkPhysicalDeviceFeatures PDF;
 			vkGetPhysicalDeviceFeatures(SelectedPhysicalDevice, &PDF);
 			const VkDeviceCreateInfo DCI = {
 				.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-				.pNext = &PDS2,
+				.pNext = &PDV13F,
 				.flags = 0,
 				.queueCreateInfoCount = static_cast<uint32_t>(std::size(DQCIs)), .pQueueCreateInfos = std::data(DQCIs),
 				.enabledLayerCount = 0, .ppEnabledLayerNames = nullptr,
@@ -329,12 +411,10 @@ int main()
 		}
 
 		//!< デバイス作成後に、キューファミリインデックスとファミリ内でのインデックスから、キューを取得 (After ceate device, get queue from family index, index in family)
-		{
-			vkGetDeviceQueue(Device, GraphicsQueue.second, GraphicsIndexInFamily, &GraphicsQueue.first);
-			vkGetDeviceQueue(Device, PresentQueue.second, PresentIndexInFamily, &PresentQueue.first);
-		}
+		vkGetDeviceQueue(Device, GraphicsQueue.second, GraphicsIndexInFamily, &GraphicsQueue.first);
+		vkGetDeviceQueue(Device, PresentQueue.second, PresentIndexInFamily, &PresentQueue.first);
 	}
-	//!< フェンス (シグナル状態で作成) (Fence, create as signaled) CPU - GPU
+	//!< フェンスをシグナル状態で作成 (Fence, create as signaled) CPU - GPU
 	VkFence Fence = VK_NULL_HANDLE;
 	{
 		constexpr VkFenceCreateInfo FCI = {
@@ -349,7 +429,8 @@ int main()
 	{
 		constexpr VkSemaphoreCreateInfo SCI = {
 			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-			.pNext = nullptr, .flags = 0
+			.pNext = nullptr,
+			.flags = 0
 		};
 		VERIFY_SUCCEEDED(vkCreateSemaphore(Device, &SCI, nullptr, &NextImageAcquiredSemaphore));
 		VERIFY_SUCCEEDED(vkCreateSemaphore(Device, &SCI, nullptr, &RenderFinishedSemaphore));
@@ -378,7 +459,7 @@ int main()
 			.pNext = nullptr,
 			.flags = 0,
 			.surface = Surface,
-			//!< minImageCount + 1 を希望 (Want minImageCount + 1)
+			//!< イメージ数は最小 + 1 を希望 (Want minImageCount + 1)
 			.minImageCount = (std::min)(SC.minImageCount + 1, 0 == SC.maxImageCount ? (std::numeric_limits<uint32_t>::max)() : SC.maxImageCount),
 			.imageFormat = SelectedSurfaceFormat.format, .imageColorSpace = SelectedSurfaceFormat.colorSpace,
 			.imageExtent = SurfaceExtent2D,
@@ -399,8 +480,8 @@ int main()
 			uint32_t Count;
 			VERIFY_SUCCEEDED(vkGetSwapchainImagesKHR(Device, Swapchain, &Count, nullptr));
 			std::vector<VkImage> Images(Count);
-			VERIFY_SUCCEEDED(vkGetSwapchainImagesKHR(Device, Swapchain, &Count, data(Images)));
-
+			VERIFY_SUCCEEDED(vkGetSwapchainImagesKHR(Device, Swapchain, &Count, std::data(Images)));
+			
 			ImageViews.reserve(std::size(Images));
 			for (const auto& i : Images) {
 				const VkImageViewCreateInfo IVCI = {
@@ -411,7 +492,11 @@ int main()
 					.viewType = VK_IMAGE_VIEW_TYPE_2D,
 					.format = SelectedSurfaceFormat.format,
 					.components = VkComponentMapping({.r = VK_COMPONENT_SWIZZLE_IDENTITY, .g = VK_COMPONENT_SWIZZLE_IDENTITY, .b = VK_COMPONENT_SWIZZLE_IDENTITY, .a = VK_COMPONENT_SWIZZLE_IDENTITY, }),
-					.subresourceRange = VkImageSubresourceRange({.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1 })
+					.subresourceRange = VkImageSubresourceRange({
+						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, 
+						.baseMipLevel = 0, .levelCount = 1, 
+						.baseArrayLayer = 0, .layerCount = 1
+					})
 				};
 				VERIFY_SUCCEEDED(vkCreateImageView(Device, &IVCI, nullptr, &ImageViews.emplace_back()));
 			}
@@ -449,6 +534,7 @@ int main()
 		}
 		return (std::numeric_limits<uint32_t>::max)();
 		};
+	//!< 汎用バッファ作成関数
 	auto CreateBuffer = [&](VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBufferUsageFlags BUF, const VkMemoryPropertyFlagBits MPFB, const size_t Size, const void* Source = nullptr) {
 		constexpr std::array<uint32_t, 0> QFI = {};
 		const VkBufferCreateInfo BCI = {
@@ -493,12 +579,15 @@ int main()
 			} vkUnmapMemory(Device, *DeviceMemory);
 		}
 		};
+	//!< デバイスローカルバッファ作成関数
 	auto CreateDeviceLocalBuffer = [&](VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBufferUsageFlags BUF, const size_t Size) {
 		CreateBuffer(Buffer, DeviceMemory, BUF, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, Size);
 		};
+	//!< ホストビジブルバッファ作成関数
 	auto CreateHostVisibleBuffer = [&](VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBufferUsageFlags BUF, const size_t Size, const void* Source) {
 		CreateBuffer(Buffer, DeviceMemory, BUF, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, Size, Source);
 		};
+	//!< バッファメモリバリア関数
 	auto BufferMemoryBarrier = [&](const VkCommandBuffer CB,
 		const VkBuffer Buffer,
 		const VkPipelineStageFlags SrcPSF, const VkPipelineStageFlags DstPSF,
@@ -524,6 +613,7 @@ int main()
 			};
 			vkCmdPipelineBarrier2(CB, &DI);
 		};
+	//!< コピーコマンド作成関数
 	auto PopulateCopyCommand = [&](const VkCommandBuffer CB, const VkBuffer Staging, const VkBuffer Buffer, const size_t Size, const VkAccessFlags AF, const VkPipelineStageFlagBits PSF) {
 		BufferMemoryBarrier(CB, Buffer,
 			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
@@ -537,18 +627,20 @@ int main()
 			VK_ACCESS_MEMORY_WRITE_BIT, AF);
 		};
 	//!< ジオメトリ (Geometry)
-	auto VertexBuffer = std::pair<VkBuffer, VkDeviceMemory>({ VK_NULL_HANDLE, VK_NULL_HANDLE });
-	auto IndexBuffer = std::pair<VkBuffer, VkDeviceMemory>({ VK_NULL_HANDLE, VK_NULL_HANDLE });
-	auto IndirectBuffer = std::pair<VkBuffer, VkDeviceMemory>({ VK_NULL_HANDLE, VK_NULL_HANDLE });
+	using BufferAndDeviceMemory = std::pair<VkBuffer, VkDeviceMemory>;
+	auto VertexBuffer = BufferAndDeviceMemory({ VK_NULL_HANDLE, VK_NULL_HANDLE });
+	auto IndexBuffer = BufferAndDeviceMemory({ VK_NULL_HANDLE, VK_NULL_HANDLE });
+	auto IndirectBuffer = BufferAndDeviceMemory({ VK_NULL_HANDLE, VK_NULL_HANDLE });
 	{
 		//!< バーテックスバッファ、ステージングの作成 (Create vertex buffer, staging)
+		using PositonColor = std::pair<glm::vec3, glm::vec3>;
 		const std::array Vertices = {
-			std::pair<glm::vec3, glm::vec3>{{ 0.0f, 0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f}},
-			std::pair<glm::vec3, glm::vec3>{{ -0.5f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f}},
-			std::pair<glm::vec3, glm::vec3>{{ 0.5f, -0.5f, 0.0f }, {  0.0f, 0.0f, 1.0f}},
+			PositonColor({ 0.0f, 0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f }),
+			PositonColor({ -0.5f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f }),
+			PositonColor({ 0.5f, -0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f }),
 		};
 		CreateDeviceLocalBuffer(&VertexBuffer.first, &VertexBuffer.second, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sizeof(Vertices));
-		auto VertexStagingBuffer = std::pair<VkBuffer, VkDeviceMemory>({ VK_NULL_HANDLE, VK_NULL_HANDLE });
+		auto VertexStagingBuffer = BufferAndDeviceMemory({ VK_NULL_HANDLE, VK_NULL_HANDLE });
 		CreateHostVisibleBuffer(&VertexStagingBuffer.first, &VertexStagingBuffer.second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(Vertices), std::data(Vertices));
 		
 		//!< インデックスバッファ、ステージングの作成 (Create index buffer, staging)
@@ -556,7 +648,7 @@ int main()
 			uint32_t(0), uint32_t(1), uint32_t(2) 
 		};
 		CreateDeviceLocalBuffer(&IndexBuffer.first, &IndexBuffer.second, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sizeof(Indices));
-		auto IndexStagingBuffer = std::pair<VkBuffer, VkDeviceMemory>({ VK_NULL_HANDLE, VK_NULL_HANDLE });
+		auto IndexStagingBuffer = BufferAndDeviceMemory({ VK_NULL_HANDLE, VK_NULL_HANDLE });
 		CreateHostVisibleBuffer(&IndexStagingBuffer.first, &IndexStagingBuffer.second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(Indices), std::data(Indices));
 
 		//!< インダイレクトバッファ、ステージングの作成 (Create indirect buffer, staging)
@@ -568,7 +660,7 @@ int main()
 			.firstInstance = 0
 		};
 		CreateDeviceLocalBuffer(&IndirectBuffer.first, &IndirectBuffer.second, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sizeof(DIIC));
-		auto IndirectStagingBuffer = std::pair<VkBuffer, VkDeviceMemory>({ VK_NULL_HANDLE, VK_NULL_HANDLE });
+		auto IndirectStagingBuffer = BufferAndDeviceMemory({ VK_NULL_HANDLE, VK_NULL_HANDLE });
 		CreateHostVisibleBuffer(&IndirectStagingBuffer.first, &IndirectStagingBuffer.second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(DIIC), &DIIC);
 	
 		//!< コピーコマンド作成 (Populate copy command)
@@ -586,22 +678,6 @@ int main()
 		} VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
 		//!< コピーコマンド発行 (Submit copy command)
 		{
-#if 0
-			const std::array<VkSemaphore, 0> WaitSems = {};
-			const std::array<VkPipelineStageFlags, 0> StageFlags = {};
-			const std::array CBs = { CB };
-			const std::array<VkSemaphore, 0> SignalSems = {};
-			const std::array SIs = {
-				VkSubmitInfo({
-					.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-					.pNext = nullptr,
-					.waitSemaphoreCount = static_cast<uint32_t>(std::size(WaitSems)), .pWaitSemaphores = std::data(WaitSems), .pWaitDstStageMask = std::data(StageFlags),
-					.commandBufferCount = static_cast<uint32_t>(std::size(CBs)), .pCommandBuffers = std::data(CBs),
-					.signalSemaphoreCount = static_cast<uint32_t>(std::size(SignalSems)), .pSignalSemaphores = std::data(SignalSems)
-				})
-			};
-			VERIFY_SUCCEEDED(vkQueueSubmit(GraphicsQueue.first, static_cast<uint32_t>(std::size(SIs)), std::data(SIs), VK_NULL_HANDLE));
-#else
 			const std::array<VkSemaphoreSubmitInfo, 0> WaitSSIs = {};
 			const std::array CBSIs = {
 				VkCommandBufferSubmitInfo({ 
@@ -623,7 +699,6 @@ int main()
 				})
 			};
 			VERIFY_SUCCEEDED(vkQueueSubmit2(GraphicsQueue.first, static_cast<uint32_t>(std::size(SIs)), std::data(SIs), VK_NULL_HANDLE));
-#endif
 			VERIFY_SUCCEEDED(vkQueueWaitIdle(GraphicsQueue.first));
 		}
 
@@ -701,6 +776,7 @@ int main()
 		VERIFY_SUCCEEDED(vkCreateRenderPass(Device, &RPCI, nullptr, &RenderPass));
 	}
 
+	//!< シェーダモジュール作成関数
 	auto CreateShaderModule = [&](const std::filesystem::path& Path) {
 		VkShaderModule SM = VK_NULL_HANDLE;
 		std::ifstream In(data(Path.string()), std::ios::in | std::ios::binary);
@@ -949,13 +1025,11 @@ int main()
 
 		//!< 次のイメージインデックスを取得、イメージが取得出来たらセマフォ(A) がシグナルされる (Acquire next image index, on acquire semaphore A will be signaled)
 		VERIFY_SUCCEEDED(vkAcquireNextImageKHR(Device, Swapchain, (std::numeric_limits<uint64_t>::max)(), NextImageAcquiredSemaphore, VK_NULL_HANDLE, &SwapchainImageIndex));
-
 		//!< サブミット (Submit)
 		{
 			const auto& CB = CommandBuffers[SwapchainImageIndex];
 			//!< セマフォ (A) がシグナル (次のイメージ取得) される迄待つ
 			//!< レンダリングが終わったらセマフォ (B) がシグナル (レンダリング完了) される
-#if 1
 			const std::array WaitSems = { NextImageAcquiredSemaphore };
 			const std::array WaitStages = { VkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT) };
 			const std::array CBs = { CB };
@@ -971,48 +1045,6 @@ int main()
 			};
 			//!< サブミットしたコマンドが完了したらフェンスがシグナルされる
 			VERIFY_SUCCEEDED(vkQueueSubmit(GraphicsQueue.first, static_cast<uint32_t>(std::size(SIs)), std::data(SIs), Fence));
-#else
-			const std::array WaitSSIs = {
-				VkSemaphoreSubmitInfo({
-					.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-					.pNext = nullptr,
-					.semaphore = NextImageAcquiredSemaphore,
-					.value = 0,
-					.stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-					.deviceIndex = 0 
-					}),
-			};
-			const std::array CBSIs = {
-				VkCommandBufferSubmitInfo({
-					.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-					.pNext = nullptr,
-					.commandBuffer = CB,
-					.deviceMask = 0
-					})
-			};
-			const std::array SignalSSIs = {
-				VkSemaphoreSubmitInfo({
-					.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-					.pNext = nullptr,
-					.semaphore = RenderFinishedSemaphore,
-					.value = 0,
-					.stageMask = VK_PIPELINE_STAGE_2_NONE,
-					.deviceIndex = 0
-					}), 
-			};
-			const std::array SIs = {
-				VkSubmitInfo2({
-					.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-					.pNext = nullptr,
-					.flags = 0,
-					.waitSemaphoreInfoCount = static_cast<uint32_t>(std::size(WaitSSIs)), .pWaitSemaphoreInfos = std::data(WaitSSIs),
-					.commandBufferInfoCount = static_cast<uint32_t>(std::size(CBSIs)), .pCommandBufferInfos = std::data(CBSIs),
-					.signalSemaphoreInfoCount = static_cast<uint32_t>(std::size(SignalSSIs)), .pSignalSemaphoreInfos = std::data(SignalSSIs)
-				})
-			};
-			//!< サブミットしたコマンドが完了したらフェンスがシグナルされる
-			VERIFY_SUCCEEDED(vkQueueSubmit2(GraphicsQueue.first, static_cast<uint32_t>(std::size(SIs)), std::data(SIs), VK_NULL_HANDLE));
-#endif
 		}
 
 		//!< プレゼンテーション (Present)
