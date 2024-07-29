@@ -427,14 +427,21 @@ int main()
 	//!< セマフォ (Semaphore) GPU - GPU
 	VkSemaphore NextImageAcquiredSemaphore = VK_NULL_HANDLE, RenderFinishedSemaphore = VK_NULL_HANDLE;
 	{
-		constexpr VkSemaphoreCreateInfo SCI = {
-			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+		constexpr VkSemaphoreTypeCreateInfo STCI = {
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
 			.pNext = nullptr,
+			.semaphoreType = VK_SEMAPHORE_TYPE_BINARY,
+			.initialValue = 0
+		};
+		const VkSemaphoreCreateInfo SCI = {
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+			.pNext = &STCI,
 			.flags = 0
 		};
 		VERIFY_SUCCEEDED(vkCreateSemaphore(Device, &SCI, nullptr, &NextImageAcquiredSemaphore));
 		VERIFY_SUCCEEDED(vkCreateSemaphore(Device, &SCI, nullptr, &RenderFinishedSemaphore));
 	}
+	
 	//!< スワップチェイン (Swapchain)
 	VkSwapchainKHR Swapchain = VK_NULL_HANDLE;
 	VkExtent2D SurfaceExtent2D;
