@@ -26,11 +26,11 @@
 #endif
 
 //!< コールバック (Callbacks)
-static void ErrorCallback(int Code, const char* Description)
+static void GlfwErrorCallback(int Code, const char* Description)
 {
 	std::cerr << "Error code = " << Code << ", " << Description << std::endl;
 }
-static void KeyCallback(GLFWwindow* Window, int Key, [[maybe_unused]] int Scancode, int Action, [[maybe_unused]] int Mods)
+static void GlfwKeyCallback(GLFWwindow* Window, int Key, [[maybe_unused]] int Scancode, int Action, [[maybe_unused]] int Mods)
 {
 	if (Key == GLFW_KEY_ESCAPE && Action == GLFW_PRESS) {
 		glfwSetWindowShouldClose(Window, GLFW_TRUE);
@@ -103,8 +103,8 @@ int main()
 #endif
 
 	//!< コールバック登録 (Register callbacks)
-	glfwSetErrorCallback(ErrorCallback);
-	glfwSetKeyCallback(Window, KeyCallback);
+	glfwSetErrorCallback(GlfwErrorCallback);
+	glfwSetKeyCallback(Window, GlfwKeyCallback);
 
 	//!< インスタンス (Instance)
 	VkInstance Instance = VK_NULL_HANDLE;
@@ -200,38 +200,21 @@ int main()
 	//!< サーフェス (Surface)
 	VkSurfaceKHR Surface = VK_NULL_HANDLE;
 	VkSurfaceFormatKHR SelectedSurfaceFormat;
-	VkPresentModeKHR SelectedPresentMode;
 	{
-		{
-			//!< glfwCreateWindowSurface がプラットフォーム毎の違いを吸収してくれる
-			VERIFY_SUCCEEDED(glfwCreateWindowSurface(Instance, Window, nullptr, &Surface));
-			uint32_t Count = 0;
-			VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfaceFormatsKHR(SelectedPhysicalDevice, Surface, &Count, nullptr));
-			std::vector<VkSurfaceFormatKHR> SFs(Count);
-			VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfaceFormatsKHR(SelectedPhysicalDevice, Surface, &Count, std::data(SFs)));
+		//!< glfwCreateWindowSurface がプラットフォーム毎の違いを吸収してくれる
+		VERIFY_SUCCEEDED(glfwCreateWindowSurface(Instance, Window, nullptr, &Surface));
+		uint32_t Count = 0;
+		VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfaceFormatsKHR(SelectedPhysicalDevice, Surface, &Count, nullptr));
+		std::vector<VkSurfaceFormatKHR> SFs(Count);
+		VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfaceFormatsKHR(SelectedPhysicalDevice, Surface, &Count, std::data(SFs)));
 
-			//!< ここでは最初に見つかった FORMAT_UNDEFINED でないものを採用する (Select first no FORMAT_UNDEFINED here)
-			SelectedSurfaceFormat = *std::ranges::find_if(SFs, [](const auto& rhs) {
-				if (VK_FORMAT_UNDEFINED != rhs.format) {
-					return true;
-				}
-				return false;
-				});
-		}
-		{
-			uint32_t Count;
-			VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfacePresentModesKHR(SelectedPhysicalDevice, Surface, &Count, nullptr));
-			std::vector<VkPresentModeKHR> PMs(Count);
-			VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfacePresentModesKHR(SelectedPhysicalDevice, Surface, &Count, std::data(PMs)));
-
-			//!< MAILBOX がサポートされるなら採用する (Select if MAILBOX supported)
-			auto It = std::ranges::find(PMs, VK_PRESENT_MODE_MAILBOX_KHR);
-			if (It == std::end(PMs)) {
-				//!< 見つからない場合は FIFO (FIFO は必ずサポートされる)
-				It = std::ranges::find(PMs, VK_PRESENT_MODE_FIFO_KHR);
+		//!< ここでは最初に見つかった FORMAT_UNDEFINED でないものを採用する (Select first no FORMAT_UNDEFINED here)
+		SelectedSurfaceFormat = *std::ranges::find_if(SFs, [](const auto& rhs) {
+			if (VK_FORMAT_UNDEFINED != rhs.format) {
+				return true;
 			}
-			SelectedPresentMode = *It;
-		}
+			return false;
+			});
 	}
 
 	//!< デバイス、キュー (Device, Queue)
@@ -410,7 +393,7 @@ int main()
 			VERIFY_SUCCEEDED(vkCreateDevice(SelectedPhysicalDevice, &DCI, nullptr, &Device));
 		}
 
-		//!< デバイス作成後に、キューファミリインデックスとファミリ内でのインデックスから、キューを取得 (After ceate device, get queue from family index, index in family)
+		//!< デバイス作成後に、キューファミリインデックスとファミリ内でのインデックスから、キューを取得 (After create device, get queue from family index, index in family)
 		vkGetDeviceQueue(Device, GraphicsQueue.second, GraphicsIndexInFamily, &GraphicsQueue.first);
 		vkGetDeviceQueue(Device, PresentQueue.second, PresentIndexInFamily, &PresentQueue.first);
 	}
@@ -459,6 +442,22 @@ int main()
 		if (GraphicsQueue.second != PresentQueue.second) {
 			QueueFamilyIndices.emplace_back(GraphicsQueue.second);
 			QueueFamilyIndices.emplace_back(PresentQueue.second);
+		}
+
+		VkPresentModeKHR SelectedPresentMode;
+		{
+			uint32_t Count;
+			VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfacePresentModesKHR(SelectedPhysicalDevice, Surface, &Count, nullptr));
+			std::vector<VkPresentModeKHR> PMs(Count);
+			VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfacePresentModesKHR(SelectedPhysicalDevice, Surface, &Count, std::data(PMs)));
+
+			//!< MAILBOX がサポートされるなら採用する (Select if MAILBOX supported)
+			auto It = std::ranges::find(PMs, VK_PRESENT_MODE_MAILBOX_KHR);
+			if (It == std::end(PMs)) {
+				//!< 見つからない場合は FIFO (FIFO は必ずサポートされる)
+				It = std::ranges::find(PMs, VK_PRESENT_MODE_FIFO_KHR);
+			}
+			SelectedPresentMode = *It;
 		}
 
 		const VkSwapchainCreateInfoKHR SCI = {
