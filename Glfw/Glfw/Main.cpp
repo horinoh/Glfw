@@ -426,17 +426,22 @@ int main()
 	}
 	
 	//!< スワップチェイン (Swapchain)
-	VkSwapchainKHR Swapchain = VK_NULL_HANDLE;
-	VkExtent2D SurfaceExtent2D;
-	std::vector<VkImageView> ImageViews;
-	uint32_t SwapchainImageIndex = 0;
+	struct Swapchain 
+	{
+		VkSwapchainKHR VkSwapchain = VK_NULL_HANDLE;
+		uint32_t Index = 0;
+		std::vector<VkImage> Images;
+		std::vector<VkImageView> ImageViews;
+		VkExtent2D Extent;
+	};
+	Swapchain Swapchain;
 	{
 		VkSurfaceCapabilitiesKHR SC;
 		VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(SelectedPhysicalDevice, Surface, &SC));
 
 		int FBWidth, FBHeight;
 		glfwGetFramebufferSize(Window, &FBWidth, &FBHeight);
-		SurfaceExtent2D = 0xffffffff != SC.currentExtent.width ? SC.currentExtent : VkExtent2D({ .width = (std::clamp)(static_cast<uint32_t>(FBWidth), SC.maxImageExtent.width, SC.minImageExtent.width), .height = (std::clamp)(static_cast<uint32_t>(FBHeight), SC.minImageExtent.height, SC.minImageExtent.height) });
+		Swapchain.Extent = 0xffffffff != SC.currentExtent.width ? SC.currentExtent : VkExtent2D({ .width = (std::clamp)(static_cast<uint32_t>(FBWidth), SC.maxImageExtent.width, SC.minImageExtent.width), .height = (std::clamp)(static_cast<uint32_t>(FBHeight), SC.minImageExtent.height, SC.minImageExtent.height) });
 
 		std::vector<uint32_t> QueueFamilyIndices;
 		if (GraphicsQueue.second != PresentQueue.second) {
@@ -468,7 +473,7 @@ int main()
 			//!< イメージ数は最小 + 1 を希望 (Want minImageCount + 1)
 			.minImageCount = (std::min)(SC.minImageCount + 1, 0 == SC.maxImageCount ? (std::numeric_limits<uint32_t>::max)() : SC.maxImageCount),
 			.imageFormat = SelectedSurfaceFormat.format, .imageColorSpace = SelectedSurfaceFormat.colorSpace,
-			.imageExtent = SurfaceExtent2D,
+			.imageExtent = Swapchain.Extent,
 			.imageArrayLayers = 1,
 			.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 			.imageSharingMode = std::empty(QueueFamilyIndices) ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT,
@@ -479,17 +484,17 @@ int main()
 			.clipped = VK_TRUE,
 			.oldSwapchain = VK_NULL_HANDLE
 		};
-		VERIFY_SUCCEEDED(vkCreateSwapchainKHR(Device, &SCI, nullptr, &Swapchain));
+		VERIFY_SUCCEEDED(vkCreateSwapchainKHR(Device, &SCI, nullptr, &Swapchain.VkSwapchain));
 
 		//!< イメージビュー (Image views)
 		{
 			uint32_t Count;
-			VERIFY_SUCCEEDED(vkGetSwapchainImagesKHR(Device, Swapchain, &Count, nullptr));
-			std::vector<VkImage> Images(Count);
-			VERIFY_SUCCEEDED(vkGetSwapchainImagesKHR(Device, Swapchain, &Count, std::data(Images)));
+			VERIFY_SUCCEEDED(vkGetSwapchainImagesKHR(Device, Swapchain.VkSwapchain, &Count, nullptr));
+			Swapchain.Images.resize(Count);
+			VERIFY_SUCCEEDED(vkGetSwapchainImagesKHR(Device, Swapchain.VkSwapchain, &Count, std::data(Swapchain.Images)));
 			
-			ImageViews.reserve(std::size(Images));
-			for (const auto& i : Images) {
+			Swapchain.ImageViews.reserve(Count);
+			for (const auto& i : Swapchain.Images) {
 				const VkImageViewCreateInfo IVCI = {
 					.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 					.pNext = nullptr,
@@ -504,13 +509,13 @@ int main()
 						.baseArrayLayer = 0, .layerCount = 1
 					})
 				};
-				VERIFY_SUCCEEDED(vkCreateImageView(Device, &IVCI, nullptr, &ImageViews.emplace_back()));
+				VERIFY_SUCCEEDED(vkCreateImageView(Device, &IVCI, nullptr, &Swapchain.ImageViews.emplace_back()));
 			}
 		}
 	}
 	//!< コマンドバッファ (Command buffer)
 	VkCommandPool CommandPool = VK_NULL_HANDLE;
-	std::vector<VkCommandBuffer> CommandBuffers(std::size(ImageViews));
+	std::vector<VkCommandBuffer> CommandBuffers(std::size(Swapchain.ImageViews));
 	{
 		const VkCommandPoolCreateInfo CPCI = {
 			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -950,10 +955,10 @@ int main()
 	}
 	//!< フレームバッファ (Frame buffer)
 	std::vector<VkFramebuffer> Framebuffers;
-	Framebuffers.reserve(std::size(ImageViews));
+	Framebuffers.reserve(std::size(Swapchain.ImageViews));
 	{
-		Framebuffers.reserve(std::size(ImageViews));
-		for (const auto& i : ImageViews) {
+		Framebuffers.reserve(std::size(Swapchain.ImageViews));
+		for (const auto& i : Swapchain.ImageViews) {
 			const std::array IVs = { i };
 			const VkFramebufferCreateInfo FCI = {
 				.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
@@ -961,7 +966,7 @@ int main()
 				.flags = 0,
 				.renderPass = RenderPass, 
 				.attachmentCount = static_cast<uint32_t>(std::size(IVs)), .pAttachments = std::data(IVs),
-				.width = SurfaceExtent2D.width, .height = SurfaceExtent2D.height,
+				.width = Swapchain.Extent.width, .height = Swapchain.Extent.height,
 				.layers = 1
 			};
 			VERIFY_SUCCEEDED(vkCreateFramebuffer(Device, &FCI, nullptr, &Framebuffers.emplace_back()));
@@ -971,18 +976,18 @@ int main()
 	//!< ビューポート、シザー (Viewport, scissor)
 	const std::array Viewports = {
 		VkViewport({
-			.x = 0.0f, .y = static_cast<float>(SurfaceExtent2D.height),
-			.width = static_cast<float>(SurfaceExtent2D.width), .height = -static_cast<float>(SurfaceExtent2D.height),
+			.x = 0.0f, .y = static_cast<float>(Swapchain.Extent.height),
+			.width = static_cast<float>(Swapchain.Extent.width), .height = -static_cast<float>(Swapchain.Extent.height),
 			.minDepth = 0.0f, .maxDepth = 1.0f
 		})
 	};
 	const std::array ScissorRects = {
-		VkRect2D({.offset = VkOffset2D({.x = 0, .y = 0 }), .extent = VkExtent2D({.width = SurfaceExtent2D.width, .height = SurfaceExtent2D.height }) }),
+		VkRect2D({.offset = VkOffset2D({.x = 0, .y = 0 }), .extent = VkExtent2D({.width = Swapchain.Extent.width, .height = Swapchain.Extent.height }) }),
 	};
 
 	//!< コマンド作成 (Populate command)
 	{
-		for (auto i = 0; i < std::size(ImageViews); ++i) {
+		for (auto i = 0; i < std::size(Swapchain.ImageViews); ++i) {
 			const auto FB = Framebuffers[i];
 			const auto CB = CommandBuffers[i];
 			constexpr VkCommandBufferBeginInfo CBBI = {
@@ -1003,7 +1008,7 @@ int main()
 					.pNext = nullptr,
 					.renderPass = RenderPass,
 					.framebuffer = FB,
-					.renderArea = VkRect2D({.offset = VkOffset2D({.x = 0, .y = 0 }), .extent = SurfaceExtent2D }),
+					.renderArea = VkRect2D({.offset = VkOffset2D({.x = 0, .y = 0 }), .extent = Swapchain.Extent }),
 					.clearValueCount = static_cast<uint32_t>(size(CVs)), .pClearValues = data(CVs)
 				};
 				vkCmdBeginRenderPass(CB, &RPBI, VK_SUBPASS_CONTENTS_INLINE); {
@@ -1017,81 +1022,83 @@ int main()
 		}
 	}
 
+	//!< フェンス待ち、リセット (Wait for fence, reset) CPU - GPU
+	//!< (シグナル状態で作成しているので、初回フレームは待ちにならない)
+	auto WaitFence = [&]() {
+		const std::array Fences = { Fence };
+		VERIFY_SUCCEEDED(vkWaitForFences(Device, static_cast<uint32_t>(std::size(Fences)), std::data(Fences), VK_TRUE, (std::numeric_limits<uint64_t>::max)()));
+		vkResetFences(Device, static_cast<uint32_t>(std::size(Fences)), std::data(Fences));
+		};
+	auto Submit = [&]() {
+		const auto& CB = CommandBuffers[Swapchain.Index];
+		//!< セマフォ (A) がシグナル (次のイメージ取得) される迄待つ
+		//!< レンダリングが終わったらセマフォ (B) がシグナル (レンダリング完了) される
+		const std::array WaitSSIs = {
+			VkSemaphoreSubmitInfo({
+				.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+				.pNext = nullptr,
+				.semaphore = NextImageAcquiredSemaphore,
+				.value = 0,
+				.stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+				.deviceIndex = 0
+				})
+		};
+		const std::array CBSIs = {
+			VkCommandBufferSubmitInfo({
+				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+				.pNext = nullptr,
+				.commandBuffer = CB,
+				.deviceMask = 0
+				})
+		};
+		const std::array SignalSSIs = {
+			VkSemaphoreSubmitInfo({
+				.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+				.pNext = nullptr,
+				.semaphore = RenderFinishedSemaphore,
+				.value = 0,
+				.stageMask = VK_PIPELINE_STAGE_2_NONE,
+				.deviceIndex = 0
+				})
+		};
+		const std::array SIs = {
+			VkSubmitInfo2({
+				.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+				.pNext = nullptr,
+				.flags = 0,
+				.waitSemaphoreInfoCount = static_cast<uint32_t>(std::size(WaitSSIs)), .pWaitSemaphoreInfos = std::data(WaitSSIs),
+				.commandBufferInfoCount = static_cast<uint32_t>(std::size(CBSIs)), .pCommandBufferInfos = std::data(CBSIs),
+				.signalSemaphoreInfoCount = static_cast<uint32_t>(std::size(SignalSSIs)), .pSignalSemaphoreInfos = std::data(SignalSSIs)
+			})
+		};
+		VERIFY_SUCCEEDED(vkQueueSubmit2(GraphicsQueue.first, static_cast<uint32_t>(std::size(SIs)), std::data(SIs), Fence));
+		};
+	auto Present = [&]() {
+		//!< セマフォ (B) がシグナル (レンダリング完了) される迄待つ
+		const std::array WaitSems = { RenderFinishedSemaphore };
+		const std::array Swapchains = { Swapchain.VkSwapchain };
+		const std::array ImageIndices = { Swapchain.Index };
+		const VkPresentInfoKHR PI = {
+			.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+			.pNext = nullptr,
+			.waitSemaphoreCount = static_cast<uint32_t>(std::size(WaitSems)), .pWaitSemaphores = std::data(WaitSems),
+			.swapchainCount = static_cast<uint32_t>(std::size(Swapchains)), .pSwapchains = std::data(Swapchains), .pImageIndices = std::data(ImageIndices),
+			.pResults = nullptr
+		};
+		VERIFY_SUCCEEDED(vkQueuePresentKHR(PresentQueue.first, &PI));
+		};
 	//!< ループ (Loop)
 	while (!glfwWindowShouldClose(Window)) {
 		glfwPollEvents();
 
-		//!< フェンス待ち、リセット (Wait for fence, reset) CPU - GPU
-		//!< (シグナル状態で作成しているので、初回フレームは待ちにならない)
-		{
-			const std::array Fences = { Fence };
-			VERIFY_SUCCEEDED(vkWaitForFences(Device, static_cast<uint32_t>(std::size(Fences)), std::data(Fences), VK_TRUE, (std::numeric_limits<uint64_t>::max)()));
-			vkResetFences(Device, static_cast<uint32_t>(std::size(Fences)), std::data(Fences));
-		}
+		WaitFence();
 
 		//!< 次のイメージインデックスを取得、イメージが取得出来たらセマフォ(A) がシグナルされる (Acquire next image index, on acquire semaphore A will be signaled)
-		VERIFY_SUCCEEDED(vkAcquireNextImageKHR(Device, Swapchain, (std::numeric_limits<uint64_t>::max)(), NextImageAcquiredSemaphore, VK_NULL_HANDLE, &SwapchainImageIndex));
-		//!< サブミット (Submit)
-		{
-			const auto& CB = CommandBuffers[SwapchainImageIndex];
-			//!< セマフォ (A) がシグナル (次のイメージ取得) される迄待つ
-			//!< レンダリングが終わったらセマフォ (B) がシグナル (レンダリング完了) される
-			const std::array WaitSSIs = { 
-				VkSemaphoreSubmitInfo({
-					.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-					.pNext = nullptr,
-					.semaphore = NextImageAcquiredSemaphore,
-					.value = 0,
-					.stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-					.deviceIndex = 0
-					})
-			};
-			const std::array CBSIs = {
-				VkCommandBufferSubmitInfo({
-					.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-					.pNext = nullptr,
-					.commandBuffer = CB,
-					.deviceMask = 0
-					})
-			};
-			const std::array SignalSSIs = {
-				VkSemaphoreSubmitInfo({
-					.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-					.pNext = nullptr,
-					.semaphore = RenderFinishedSemaphore,
-					.value = 0,
-					.stageMask = VK_PIPELINE_STAGE_2_NONE,
-					.deviceIndex = 0
-					})
-			};
-			const std::array SIs = {
-				VkSubmitInfo2({
-					.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-					.pNext = nullptr,
-					.flags = 0,
-					.waitSemaphoreInfoCount = static_cast<uint32_t>(std::size(WaitSSIs)), .pWaitSemaphoreInfos = std::data(WaitSSIs),
-					.commandBufferInfoCount = static_cast<uint32_t>(std::size(CBSIs)), .pCommandBufferInfos = std::data(CBSIs),
-					.signalSemaphoreInfoCount = static_cast<uint32_t>(std::size(SignalSSIs)), .pSignalSemaphoreInfos = std::data(SignalSSIs)
-				})
-			};
-			VERIFY_SUCCEEDED(vkQueueSubmit2(GraphicsQueue.first, static_cast<uint32_t>(std::size(SIs)), std::data(SIs), Fence));
-		}
+		VERIFY_SUCCEEDED(vkAcquireNextImageKHR(Device, Swapchain.VkSwapchain, (std::numeric_limits<uint64_t>::max)(), NextImageAcquiredSemaphore, VK_NULL_HANDLE, &Swapchain.Index));
+		
+		Submit();
 
-		//!< プレゼンテーション (Present)
-		{
-			//!< セマフォ (B) がシグナル (レンダリング完了) される迄待つ
-			const std::array WaitSems = { RenderFinishedSemaphore };
-			const std::array Swapchains = { Swapchain };
-			const std::array ImageIndices = { SwapchainImageIndex };
-			const VkPresentInfoKHR PI = {
-				.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-				.pNext = nullptr,
-				.waitSemaphoreCount = static_cast<uint32_t>(std::size(WaitSems)), .pWaitSemaphores = std::data(WaitSems),
-				.swapchainCount = static_cast<uint32_t>(std::size(Swapchains)), .pSwapchains = std::data(Swapchains), .pImageIndices = std::data(ImageIndices),
-				.pResults = nullptr
-			};
-			VERIFY_SUCCEEDED(vkQueuePresentKHR(PresentQueue.first, &PI));
-		}
+		Present();
 	}
 	
 	//!< 処理の完了を待つ (Wait for idle)
@@ -1134,11 +1141,11 @@ int main()
 		if (VK_NULL_HANDLE != CommandPool) {
 			vkDestroyCommandPool(Device, CommandPool, nullptr);
 		}
-		for (auto i : ImageViews) {
+		for (auto i : Swapchain.ImageViews) {
 			vkDestroyImageView(Device, i, nullptr);
 		}
-		if (VK_NULL_HANDLE != Swapchain) {
-			vkDestroySwapchainKHR(Device, Swapchain, nullptr);
+		if (VK_NULL_HANDLE != Swapchain.VkSwapchain) {
+			vkDestroySwapchainKHR(Device, Swapchain.VkSwapchain, nullptr);
 		}
 		if (VK_NULL_HANDLE != RenderFinishedSemaphore) {
 			vkDestroySemaphore(Device, RenderFinishedSemaphore, nullptr);
