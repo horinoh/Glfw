@@ -9,7 +9,9 @@
 #include <Vulkan/vulkan.h>
 #include <glm/glm.hpp>
 
+#ifdef _WIN64
 #pragma comment(lib, "vulkan-1.lib")
+#endif
 
 #ifdef _DEBUG
 #define VERIFY_SUCCEEDED(X) { const auto VR = (X); if(VK_SUCCESS != VR) { std::cerr << VR << std::endl; /*__debugbreak();*/ } }

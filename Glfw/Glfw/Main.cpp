@@ -6,11 +6,12 @@
 #include <map>
 
 #include "VK.h"
-
 #include <GLFW/glfw3.h>
 
-#pragma comment(lib, "glfw3dll.lib")
+#ifdef _WIN64
 #pragma comment(lib, "VK.lib")
+#pragma comment(lib, "glfw3dll.lib")
+#endif
 
 //#define USE_BORDERLESS
 //#define USE_FULLSCREEN

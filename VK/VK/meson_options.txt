@@ -1,0 +1,2 @@
+option('VK', type : 'string', value : '', description : 'Vulkan SDK')
+option('GLM', type : 'string', value : '', description : 'GLM SDK')
