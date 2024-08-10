@@ -1,1 +1,2 @@
 option('GLFW', type : 'string', value : '', description : 'GLFW SDK')
+option('GLM', type : 'string', value : '', description : 'GLM SDK')

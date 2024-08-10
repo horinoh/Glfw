@@ -16,8 +16,17 @@ Lib = [
         dependency('vulkan'),
 ]
 
+# OS によるライブラリ名の違い
+LIBPRE = 'lib'
+LIBSUF = 'a'
+if host_machine.system() == 'windows'
+       LIBPRE = ''
+       LIBSUF = 'lib'
+endif
+
 library('VK',
            'VK.cpp',
            install : true,
            include_directories : Inc,
-           dependencies : Lib)
+           dependencies : Lib,
+           name_prefix : LIBPRE, name_suffix : LIBSUF)
