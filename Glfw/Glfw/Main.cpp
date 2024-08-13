@@ -33,7 +33,12 @@ class TriangleVK : public VK
 private:
 	using Super = VK;
 public:
-	virtual void CreateGeometry() override { 
+	TriangleVK(GLFWwindow* Win) : GlfwWindow(Win) {}
+
+	virtual void CreateSurface() override {
+		VERIFY_SUCCEEDED(glfwCreateWindowSurface(Instance, GlfwWindow, nullptr, &Surface));
+	}
+	virtual void CreateGeometry() override {
 		//!< バーテックスバッファ、ステージングの作成 (Create vertex buffer, staging)
 		using PositonColor = std::pair<glm::vec3, glm::vec3>;
 		const std::array Vertices = {
@@ -78,50 +83,18 @@ public:
 			PopulateCopyCommand(CB, IndexStagingBuffer.first, IndexBuffers[0].first, sizeof(Indices), VK_ACCESS_INDEX_READ_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
 			PopulateCopyCommand(CB, IndirectStagingBuffer.first, IndirectBuffers[0].first, sizeof(DIIC), VK_ACCESS_INDIRECT_COMMAND_READ_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT);
 		} VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
-		//!< コピーコマンド発行 (Submit copy command)
-		{
-			const std::array<VkSemaphoreSubmitInfo, 0> WaitSSIs = {};
-			const std::array CBSIs = {
-				VkCommandBufferSubmitInfo({
-					.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-					.pNext = nullptr,
-					.commandBuffer = CB,
-					.deviceMask = 0
-					})
-			};
-			const std::array<VkSemaphoreSubmitInfo, 0> SignalSSIs = {};
-			const std::array SIs = {
-				VkSubmitInfo2({
-					.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-					.pNext = nullptr,
-					.flags = 0,
-					.waitSemaphoreInfoCount = static_cast<uint32_t>(std::size(WaitSSIs)), .pWaitSemaphoreInfos = std::data(WaitSSIs),
-					.commandBufferInfoCount = static_cast<uint32_t>(std::size(CBSIs)), .pCommandBufferInfos = std::data(CBSIs),
-					.signalSemaphoreInfoCount = static_cast<uint32_t>(std::size(SignalSSIs)), .pSignalSemaphoreInfos = std::data(SignalSSIs)
-				})
-			};
-			VERIFY_SUCCEEDED(vkQueueSubmit2(GraphicsQueue.first, static_cast<uint32_t>(std::size(SIs)), std::data(SIs), VK_NULL_HANDLE));
-			VERIFY_SUCCEEDED(vkQueueWaitIdle(GraphicsQueue.first));
-		}
 
-		if (VK_NULL_HANDLE != VertexStagingBuffer.second) {
-			vkFreeMemory(Device, VertexStagingBuffer.second, nullptr);
-		}
-		if (VK_NULL_HANDLE != VertexStagingBuffer.first) {
-			vkDestroyBuffer(Device, VertexStagingBuffer.first, nullptr);
-		}
-		if (VK_NULL_HANDLE != IndexStagingBuffer.second) {
-			vkFreeMemory(Device, IndexStagingBuffer.second, nullptr);
-		}
-		if (VK_NULL_HANDLE != IndexStagingBuffer.first) {
-			vkDestroyBuffer(Device, IndexStagingBuffer.first, nullptr);
-		}
-		if (VK_NULL_HANDLE != IndirectStagingBuffer.second) {
-			vkFreeMemory(Device, IndirectStagingBuffer.second, nullptr);
-		}
-		if (VK_NULL_HANDLE != IndirectStagingBuffer.first) {
-			vkDestroyBuffer(Device, IndirectStagingBuffer.first, nullptr);
-		}
+		//!< コピーコマンド発行 (Submit copy command)
+		SubmitAndWait(CB);
+
+		vkFreeMemory(Device, VertexStagingBuffer.second, nullptr);
+		vkDestroyBuffer(Device, VertexStagingBuffer.first, nullptr);
+	
+		vkFreeMemory(Device, IndexStagingBuffer.second, nullptr);
+		vkDestroyBuffer(Device, IndexStagingBuffer.first, nullptr);
+		
+		vkFreeMemory(Device, IndirectStagingBuffer.second, nullptr);
+		vkDestroyBuffer(Device, IndirectStagingBuffer.first, nullptr);
 	}
 	virtual void CreatePipeline() override {
 		const std::array SMs = {
@@ -299,6 +272,9 @@ public:
 			} VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
 		}
 	}
+
+protected:
+	GLFWwindow* GlfwWindow = nullptr;
 };
 
 int main()
@@ -346,32 +322,32 @@ int main()
 	constexpr auto Width = 1920, Height = 1080;
 #ifdef USE_FULLSCREEN
 	//!< フルスクリーンにする場合 (Fullscreen)
-	const auto Window = glfwCreateWindow(Width, Height, "Title", glfwGetPrimaryMonitor(), nullptr);
+	const auto GlfwWin = glfwCreateWindow(Width, Height, "Title", glfwGetPrimaryMonitor(), nullptr);
 #else
-	const auto Window = glfwCreateWindow(Width, Height, "Title", nullptr, nullptr);
+	const auto GlfwWin = glfwCreateWindow(Width, Height, "Title", nullptr, nullptr);
 	{
 		int WinLeft, WinTop, WinRight, WinBottom;
-		glfwGetWindowFrameSize(Window, &WinLeft, &WinTop, &WinRight, &WinBottom);
+		glfwGetWindowFrameSize(GlfwWin, &WinLeft, &WinTop, &WinRight, &WinBottom);
 		std::cout << "Window frame size (LTRB) = " << WinLeft << ", " << WinTop << ", " << WinRight << " ," << WinBottom << std::endl;
 
 		int WinX, WinY;
-		glfwGetWindowPos(Window, &WinX, &WinY);		
+		glfwGetWindowPos(GlfwWin, &WinX, &WinY);		
 		std::cout << "Window pos = " << WinX << ", " << WinY << std::endl;
 		int WinWidth, WinHeight;
-		glfwGetWindowSize(Window, &WinWidth, &WinHeight);
+		glfwGetWindowSize(GlfwWin, &WinWidth, &WinHeight);
 		std::cout << "Window size = " << WinWidth << "x" << WinHeight << std::endl;
 
 		int FBWidth, GBHeight;
-		glfwGetFramebufferSize(Window, &FBWidth, &GBHeight);
+		glfwGetFramebufferSize(GlfwWin, &FBWidth, &GBHeight);
 		std::cout << "Framebuffer size = " << FBWidth << "x" << GBHeight << std::endl;
 	}
 #endif
 
 	//!< コールバック登録 (Register callbacks)
 	glfwSetErrorCallback(GlfwErrorCallback);
-	glfwSetKeyCallback(Window, GlfwKeyCallback);
+	glfwSetKeyCallback(GlfwWin, GlfwKeyCallback);
 
-	TriangleVK TriVK;
+	TriangleVK TriVK(GlfwWin);
 
 	//!< インスタンス (Instance)
 	{
@@ -392,7 +368,7 @@ int main()
 
 	//!< サーフェス (Surface)
 	//!< glfwCreateWindowSurface がプラットフォーム毎の違いを吸収してくれる
-	VERIFY_SUCCEEDED(glfwCreateWindowSurface(TriVK.Instance, Window, nullptr, &TriVK.Surface));
+	TriVK.CreateSurface();
 	TriVK.SelectSurfaceFormat();
 
 	//!< デバイス、キュー (Device, Queue)
@@ -407,7 +383,7 @@ int main()
 	//!< スワップチェイン (Swapchain)
 	{
 		int FBWidth, FBHeight;
-		glfwGetFramebufferSize(Window, &FBWidth, &FBHeight);
+		glfwGetFramebufferSize(GlfwWin, &FBWidth, &FBHeight);
 		TriVK.CreateSwapchain(static_cast<const uint32_t>(FBWidth), static_cast<const uint32_t>(FBHeight));
 	}
 
@@ -436,7 +412,7 @@ int main()
 	TriVK.PopulateCommand();
 
 	//!< ループ (Loop)
-	while (!glfwWindowShouldClose(Window)) {
+	while (!glfwWindowShouldClose(GlfwWin)) {
 		glfwPollEvents();
 
 		TriVK.WaitFence();
@@ -447,7 +423,7 @@ int main()
 	}
 
 	//!< GLFW 後片付け (Terminate)
-	glfwDestroyWindow(Window);
+	glfwDestroyWindow(GlfwWin);
 	glfwTerminate();
 
 	exit(EXIT_SUCCESS);

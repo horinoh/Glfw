@@ -140,13 +140,14 @@ void VK::SelectPhysicalDevice()
 		const auto MemTotalR = std::accumulate(std::data(MemPropR.memoryHeaps), &MemPropR.memoryHeaps[MemPropR.memoryHeapCount], VkDeviceSize(0), [](auto Sum, const auto& rhs) { return Sum + rhs.size; });
 		return MemTotalL < MemTotalR;
 		});
-#ifdef _DEBUG
-	VkPhysicalDeviceProperties PDP;
-	vkGetPhysicalDeviceProperties(SelectedPhysDevice.first, &PDP);
-	std::cout << PDP.deviceName << "is selected" << std::endl;
-#endif
+
+	//!< デバイスプロパティを覚えておく (Remember device properties)
+	vkGetPhysicalDeviceProperties(SelectedPhysDevice.first, &SelectedPhysDevice.second.PDP);
 	//!< メモリプロパティを覚えておく (Remember memory properties)
-	vkGetPhysicalDeviceMemoryProperties(SelectedPhysDevice.first, &SelectedPhysDevice.second);
+	vkGetPhysicalDeviceMemoryProperties(SelectedPhysDevice.first, &SelectedPhysDevice.second.PDMP);
+#ifdef _DEBUG
+	std::cout << SelectedPhysDevice.second.PDP.deviceName << "is selected" << std::endl;
+#endif
 }
 
 void VK::SelectSurfaceFormat() 
@@ -473,9 +474,9 @@ void VK::CreateCommandBuffer()
 
 uint32_t VK::GetMemoryTypeIndex(const uint32_t TypeBits, const VkMemoryPropertyFlags MPF) const
 {
-	for (uint32_t i = 0; i < SelectedPhysDevice.second.memoryTypeCount; ++i) {
+	for (uint32_t i = 0; i < SelectedPhysDevice.second.PDMP.memoryTypeCount; ++i) {
 		if (TypeBits & (1 << i)) {
-			if ((SelectedPhysDevice.second.memoryTypes[i].propertyFlags & MPF) == MPF) {
+			if ((SelectedPhysDevice.second.PDMP.memoryTypes[i].propertyFlags & MPF) == MPF) {
 				return i;
 			}
 		}
@@ -773,4 +774,30 @@ void VK::Present()
 		.pResults = nullptr
 	};
 	VERIFY_SUCCEEDED(vkQueuePresentKHR(PresentQueue.first, &PI));
+}
+
+void VK::SubmitAndWait(const VkCommandBuffer CB)
+{
+	const std::array<VkSemaphoreSubmitInfo, 0> WaitSSIs = {};
+	const std::array CBSIs = {
+		VkCommandBufferSubmitInfo({
+			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+			.pNext = nullptr,
+			.commandBuffer = CB,
+			.deviceMask = 0
+			})
+	};
+	const std::array<VkSemaphoreSubmitInfo, 0> SignalSSIs = {};
+	const std::array SIs = {
+		VkSubmitInfo2({
+			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+			.pNext = nullptr,
+			.flags = 0,
+			.waitSemaphoreInfoCount = static_cast<uint32_t>(std::size(WaitSSIs)), .pWaitSemaphoreInfos = std::data(WaitSSIs),
+			.commandBufferInfoCount = static_cast<uint32_t>(std::size(CBSIs)), .pCommandBufferInfos = std::data(CBSIs),
+			.signalSemaphoreInfoCount = static_cast<uint32_t>(std::size(SignalSSIs)), .pSignalSemaphoreInfos = std::data(SignalSSIs)
+		})
+	};
+	VERIFY_SUCCEEDED(vkQueueSubmit2(GraphicsQueue.first, static_cast<uint32_t>(std::size(SIs)), std::data(SIs), VK_NULL_HANDLE));
+	VERIFY_SUCCEEDED(vkQueueWaitIdle(GraphicsQueue.first));
 }

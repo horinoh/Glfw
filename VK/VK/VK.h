@@ -22,7 +22,12 @@
 class VK 
 {
 public:
-	using PhysicalDeviceAndMemoryProperties = std::pair<VkPhysicalDevice, VkPhysicalDeviceMemoryProperties>;
+	struct PhysDevProp 
+	{
+		VkPhysicalDeviceProperties PDP;
+		VkPhysicalDeviceMemoryProperties PDMP;
+	};
+	using PhysicalDeviceAndProps = std::pair<VkPhysicalDevice, PhysDevProp>;
 	using QueueAndFamilyIndex = std::pair<VkQueue, uint32_t>;
 	using BufferAndDeviceMemory = std::pair<VkBuffer, VkDeviceMemory>;
 
@@ -30,6 +35,7 @@ public:
 
 	virtual void CreateInstance(std::vector<const char*>& Extensions);
 	virtual void SelectPhysicalDevice();
+	virtual void CreateSurface() {}
 	virtual void SelectSurfaceFormat();
 	virtual void CreateDevice();
 	virtual void CreateFence();
@@ -74,7 +80,10 @@ public:
 	virtual void Submit();
 	virtual void Present();
 
-//protected:
+public:
+	virtual void SubmitAndWait(const VkCommandBuffer CB);
+
+protected:
 	VkInstance Instance = VK_NULL_HANDLE;
 #ifdef _DEBUG
 	VkDebugUtilsMessengerEXT DebugUtilsMessenger = VK_NULL_HANDLE;
@@ -82,8 +91,8 @@ public:
 	PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessenger;
 #endif
 	
-	PhysicalDeviceAndMemoryProperties SelectedPhysDevice;
-	
+	PhysicalDeviceAndProps SelectedPhysDevice;
+
 	VkSurfaceKHR Surface = VK_NULL_HANDLE;
 	VkSurfaceFormatKHR SelectedSurfaceFormat;
 	
