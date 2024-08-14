@@ -81,6 +81,76 @@ public:
 	virtual void Present();
 
 public:
+	void CreatePipeline(VkPipeline& PL,
+		const std::vector<VkPipelineShaderStageCreateInfo>& PSSCIs,
+		const VkPipelineVertexInputStateCreateInfo& PVISCI,
+		const VkPipelineInputAssemblyStateCreateInfo& PIASCI,
+		const VkPipelineTessellationStateCreateInfo& PTSCI,
+		const VkPipelineViewportStateCreateInfo& PVSCI,
+		const VkPipelineRasterizationStateCreateInfo& PRSCI,
+		const VkPipelineMultisampleStateCreateInfo& PMSCI,
+		const VkPipelineDepthStencilStateCreateInfo& PDSSCI,
+		const VkPipelineColorBlendStateCreateInfo& PCBSCI,
+		const VkPipelineDynamicStateCreateInfo& PDSCI,
+		const VkPipelineLayout PLL,
+		const VkRenderPass RP);
+	void CreatePipeline(VkPipeline& PL,
+		const VkShaderModule VS, const VkShaderModule FS, const VkShaderModule TCS, const VkShaderModule TES, const VkShaderModule GS,
+		const std::vector<VkVertexInputBindingDescription>& VIBDs, const std::vector<VkVertexInputAttributeDescription>& VIADs,
+		const VkPrimitiveTopology PT,
+		const uint32_t PatchControlPoints,
+		const VkPolygonMode PM, const VkCullModeFlags CMF, const VkFrontFace FF,
+		const VkBool32 DepthEnable,
+		const VkPipelineLayout PLL,
+		const VkRenderPass RP);
+	//!< 頂点データによるメッシュ描画等
+	void CreatePipeline(VkPipeline& PL, 
+		const VkShaderModule VS, const VkShaderModule FS,
+		const std::vector<VkVertexInputBindingDescription>& VIBDs, const std::vector<VkVertexInputAttributeDescription>& VIADs,
+		const VkBool32 DepthEnable,
+		const VkPipelineLayout PLL,
+		const VkRenderPass RP) {
+		CreatePipeline(PL, 
+			VS, FS, VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE,
+			VIBDs, VIADs,
+			VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
+			0,
+			VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE,
+			DepthEnable,
+			PLL, 
+			RP);
+	}
+	//!< 全画面ポリゴン描画等
+	void CreatePipeline(VkPipeline& PL, 
+		const VkShaderModule VS, const VkShaderModule FS,
+		const VkPipelineLayout PLL,
+		const VkRenderPass RP) {
+		CreatePipeline(PL,
+			VS, FS, VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE,
+			{}, {},
+			VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
+			0,
+			VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE,
+			VK_FALSE,
+			PLL,
+			RP);
+	}
+	//!< テッセレーションによる描画等
+	void CreatePipeline(VkPipeline& PL, 
+		const VkShaderModule VS, const VkShaderModule FS, const VkShaderModule TCS, const VkShaderModule TES, const VkShaderModule GS,
+		const VkPipelineLayout PLL,
+		const VkRenderPass RP) {
+		CreatePipeline(PL,
+			VS, FS, TCS, TES, GS,
+			{}, {},
+			VK_PRIMITIVE_TOPOLOGY_PATCH_LIST,
+			1,
+			VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE,
+			VK_TRUE,
+			PLL,
+			RP);
+	}
+
 	virtual void SubmitAndWait(const VkCommandBuffer CB);
 
 protected:
