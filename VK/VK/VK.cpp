@@ -776,6 +776,87 @@ void VK::Present()
 	VERIFY_SUCCEEDED(vkQueuePresentKHR(PresentQueue.first, &PI));
 }
 
+void VK::CreateGeometry(const std::vector<VK::SizeAndDataPtr>& Vtxs,
+	const VK::SizeAndDataPtr& Idx,
+	const uint32_t IdxCount, const uint32_t VtxCount, const uint32_t InstCount)
+{
+	//!< バーテックスバッファ、ステージングの作成 (Create vertex buffer, staging)
+	std::vector<BufferAndDeviceMemory> VertexStagingBuffers;
+	for (const auto& i : Vtxs) {
+		auto& VSB = VertexStagingBuffers.emplace_back(BufferAndDeviceMemory({ VK_NULL_HANDLE, VK_NULL_HANDLE }));
+		CreateDeviceLocalBuffer(VertexBuffers.emplace_back(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, i.first);
+		CreateHostVisibleBuffer(&VSB.first, &VSB.second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, i.first, i.second);
+	}
+
+	auto IndexStagingBuffer = BufferAndDeviceMemory({ VK_NULL_HANDLE, VK_NULL_HANDLE });
+	const auto HasIdx = Idx.first != 0 && Idx.second != nullptr && IdxCount != 0;
+	if (HasIdx) {
+		//!< インデックスバッファ、ステージングの作成 (Create index buffer, staging)
+		CreateDeviceLocalBuffer(IndexBuffers.emplace_back(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, Idx.first);
+		CreateHostVisibleBuffer(&IndexStagingBuffer.first, &IndexStagingBuffer.second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, Idx.first, Idx.second);
+	}
+
+	//!< インダイレクトバッファ、ステージングの作成 (Create indirect buffer, staging)
+	auto IndirectStagingBuffer = BufferAndDeviceMemory({ VK_NULL_HANDLE, VK_NULL_HANDLE });
+	const VkDrawIndexedIndirectCommand DIIC = {
+		.indexCount = IdxCount,
+		.instanceCount = InstCount,
+		.firstIndex = 0,
+		.vertexOffset = 0,
+		.firstInstance = 0
+	};
+	const VkDrawIndirectCommand DIC = {
+		.vertexCount = VtxCount,
+		.instanceCount = InstCount,
+		.firstVertex = 0,
+		.firstInstance = 0
+	};
+	if (HasIdx) {
+		CreateDeviceLocalBuffer(IndirectBuffers.emplace_back(), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sizeof(DIIC));
+		CreateHostVisibleBuffer(&IndirectStagingBuffer.first, &IndirectStagingBuffer.second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(DIIC), &DIIC);
+	}
+	else {
+		CreateDeviceLocalBuffer(IndirectBuffers.emplace_back(), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sizeof(DIC));
+		CreateHostVisibleBuffer(&IndirectStagingBuffer.first, &IndirectStagingBuffer.second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(DIC), &DIC);
+	}
+
+	//!< コピーコマンド作成 (Populate copy command)
+	const auto& CB = CommandBuffers[0];
+	constexpr VkCommandBufferBeginInfo CBBI = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		.pNext = nullptr,
+		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+		.pInheritanceInfo = nullptr
+	};
+	constexpr auto Offset = 0;
+	VERIFY_SUCCEEDED(vkBeginCommandBuffer(CB, &CBBI)); {
+		for (auto i = 0; i < std::size(Vtxs);++i) {
+			PopulateCopyCommand(CB, VertexStagingBuffers[i].first, VertexBuffers[Offset + 0].first, Vtxs[i].first, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
+		}
+		if (HasIdx) {
+			PopulateCopyCommand(CB, IndexStagingBuffer.first, IndexBuffers[Offset + 0].first, Idx.first, VK_ACCESS_INDEX_READ_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
+			PopulateCopyCommand(CB, IndirectStagingBuffer.first, IndirectBuffers[Offset + 0].first, sizeof(DIIC), VK_ACCESS_INDIRECT_COMMAND_READ_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT);
+		}
+		else {
+			PopulateCopyCommand(CB, IndirectStagingBuffer.first, IndirectBuffers[Offset + 0].first, sizeof(DIC), VK_ACCESS_INDIRECT_COMMAND_READ_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT);
+		}
+	} VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
+
+	//!< コピーコマンド発行 (Submit copy command)
+	SubmitAndWait(CB);
+
+	for (auto& i : VertexStagingBuffers) {
+		vkFreeMemory(Device, i.second, nullptr);
+		vkDestroyBuffer(Device, i.first, nullptr);
+	}
+	if (HasIdx) {
+		vkFreeMemory(Device, IndexStagingBuffer.second, nullptr);
+		vkDestroyBuffer(Device, IndexStagingBuffer.first, nullptr);
+	}
+	vkFreeMemory(Device, IndirectStagingBuffer.second, nullptr);
+	vkDestroyBuffer(Device, IndirectStagingBuffer.first, nullptr);
+}
+
 void VK::CreatePipeline(VkPipeline& PL,
 	const std::vector<VkPipelineShaderStageCreateInfo>& PSSCIs,
 	const VkPipelineVertexInputStateCreateInfo& PVISCI,

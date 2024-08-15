@@ -81,6 +81,17 @@ public:
 	virtual void Present();
 
 public:
+	using SizeAndDataPtr = std::pair<const size_t, const void*>;
+	void CreateGeometry(const std::vector<SizeAndDataPtr>& Vtxs, 
+		const SizeAndDataPtr& Idxs,
+		const uint32_t IdxCount, const uint32_t VtxCount, const uint32_t InstCount);
+	void CreateGeometry(const SizeAndDataPtr& Vtx, const SizeAndDataPtr& Idx, const uint32_t IdxCount, const uint32_t InstCount) {
+		CreateGeometry({ Vtx }, Idx, IdxCount, 0, InstCount);
+	}
+	void CreateGeometry(const SizeAndDataPtr& Vtx, const uint32_t VtxCount, const uint32_t InstCount) {
+		CreateGeometry({ Vtx }, SizeAndDataPtr({ 0, nullptr }), 0, VtxCount, InstCount);
+	}
+
 	void CreatePipeline(VkPipeline& PL,
 		const std::vector<VkPipelineShaderStageCreateInfo>& PSSCIs,
 		const VkPipelineVertexInputStateCreateInfo& PVISCI,

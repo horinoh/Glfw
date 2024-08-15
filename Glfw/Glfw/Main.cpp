@@ -39,62 +39,18 @@ public:
 		VERIFY_SUCCEEDED(glfwCreateWindowSurface(Instance, GlfwWindow, nullptr, &Surface));
 	}
 	virtual void CreateGeometry() override {
-		//!< バーテックスバッファ、ステージングの作成 (Create vertex buffer, staging)
 		using PositonColor = std::pair<glm::vec3, glm::vec3>;
 		const std::array Vertices = {
 			PositonColor({ 0.0f, 0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f }),
 			PositonColor({ -0.5f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f }),
 			PositonColor({ 0.5f, -0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f }),
 		};
-		CreateDeviceLocalBuffer(VertexBuffers.emplace_back(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sizeof(Vertices));
-		auto VertexStagingBuffer = BufferAndDeviceMemory({ VK_NULL_HANDLE, VK_NULL_HANDLE });
-		CreateHostVisibleBuffer(&VertexStagingBuffer.first, &VertexStagingBuffer.second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(Vertices), std::data(Vertices));
-
-		//!< インデックスバッファ、ステージングの作成 (Create index buffer, staging)
 		constexpr std::array Indices = {
 			uint32_t(0), uint32_t(1), uint32_t(2)
 		};
-		CreateDeviceLocalBuffer(IndexBuffers.emplace_back(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sizeof(Indices));
-		auto IndexStagingBuffer = BufferAndDeviceMemory({ VK_NULL_HANDLE, VK_NULL_HANDLE });
-		CreateHostVisibleBuffer(&IndexStagingBuffer.first, &IndexStagingBuffer.second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(Indices), std::data(Indices));
-
-		//!< インダイレクトバッファ、ステージングの作成 (Create indirect buffer, staging)
-		constexpr VkDrawIndexedIndirectCommand DIIC = {
-			.indexCount = static_cast<uint32_t>(std::size(Indices)),
-			.instanceCount = 1,
-			.firstIndex = 0,
-			.vertexOffset = 0,
-			.firstInstance = 0
-		};
-		CreateDeviceLocalBuffer(IndirectBuffers.emplace_back(), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sizeof(DIIC));
-		auto IndirectStagingBuffer = BufferAndDeviceMemory({ VK_NULL_HANDLE, VK_NULL_HANDLE });
-		CreateHostVisibleBuffer(&IndirectStagingBuffer.first, &IndirectStagingBuffer.second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(DIIC), &DIIC);
-
-		//!< コピーコマンド作成 (Populate copy command)
-		const auto& CB = CommandBuffers[0];
-		constexpr VkCommandBufferBeginInfo CBBI = {
-			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			.pNext = nullptr,
-			.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-			.pInheritanceInfo = nullptr
-		};
-		VERIFY_SUCCEEDED(vkBeginCommandBuffer(CB, &CBBI)); {
-			PopulateCopyCommand(CB, VertexStagingBuffer.first, VertexBuffers[0].first, sizeof(Vertices), VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
-			PopulateCopyCommand(CB, IndexStagingBuffer.first, IndexBuffers[0].first, sizeof(Indices), VK_ACCESS_INDEX_READ_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
-			PopulateCopyCommand(CB, IndirectStagingBuffer.first, IndirectBuffers[0].first, sizeof(DIIC), VK_ACCESS_INDIRECT_COMMAND_READ_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT);
-		} VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
-
-		//!< コピーコマンド発行 (Submit copy command)
-		SubmitAndWait(CB);
-
-		vkFreeMemory(Device, VertexStagingBuffer.second, nullptr);
-		vkDestroyBuffer(Device, VertexStagingBuffer.first, nullptr);
-	
-		vkFreeMemory(Device, IndexStagingBuffer.second, nullptr);
-		vkDestroyBuffer(Device, IndexStagingBuffer.first, nullptr);
-		
-		vkFreeMemory(Device, IndirectStagingBuffer.second, nullptr);
-		vkDestroyBuffer(Device, IndirectStagingBuffer.first, nullptr);
+		VK::CreateGeometry(VK::SizeAndDataPtr({ sizeof(Vertices), std::data(Vertices) }),
+			VK::SizeAndDataPtr({ sizeof(Indices), std::data(Indices) }), 
+			std::size(Indices), 1);
 	}
 	virtual void CreatePipeline() override {
 		const std::array SMs = {
