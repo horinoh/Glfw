@@ -16,6 +16,8 @@
 //#define USE_BORDERLESS
 //#define USE_FULLSCREEN
 
+#define USE_INDEX
+
 //!< コールバック (Callbacks)
 static void GlfwErrorCallback(int Code, const char* Description)
 {
@@ -45,18 +47,28 @@ public:
 			PositonColor({ -0.5f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f }),
 			PositonColor({ 0.5f, -0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f }),
 		};
+#ifdef USE_INDEX
 		constexpr std::array Indices = {
-			uint32_t(0), uint32_t(1), uint32_t(2)
+			uint32_t(0), uint32_t(1), uint32_t(2) 
 		};
-		VK::CreateGeometry(VK::SizeAndDataPtr({ sizeof(Vertices), std::data(Vertices) }),
-			VK::SizeAndDataPtr({ sizeof(Indices), std::data(Indices) }), 
+		VK::CreateGeometry(SIZE_DATA(Vertices),
+			SIZE_DATA(Indices),
 			std::size(Indices), 1);
+#else
+		VK::CreateGeometry(SIZE_DATA(Vertices)),
+			std::size(Vertices), 1);
+#endif
 	}
 	virtual void CreatePipeline() override {
+		Pipelines.emplace_back();
+		
 		const std::array SMs = {
 			CreateShaderModule(std::filesystem::path(".") / "Glfw.vert.spv"),
 			CreateShaderModule(std::filesystem::path(".") / "Glfw.frag.spv"),
 		};
+
+		std::vector<std::thread> Threads = {};
+
 		const std::vector VIBDs = {
 			VkVertexInputBindingDescription({.binding = 0, .stride = sizeof(glm::vec3) + sizeof(glm::vec3), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX }),
 		};
@@ -64,13 +76,16 @@ public:
 			VkVertexInputAttributeDescription({.location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = 0 }),
 			VkVertexInputAttributeDescription({.location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = sizeof(glm::vec3) }),
 		};
-		
-		VK::CreatePipeline(Pipelines.emplace_back(),
+		Threads.emplace_back(std::thread([&] {
+			VK::CreatePipeline(Pipelines[0],
 			SMs[0], SMs[1],
 			VIBDs, VIADs,
 			VK_FALSE,
 			PipelineLayouts[0], 
 			RenderPasses[0]);
+		}));
+		
+		for (auto& i : Threads) { i.join(); }
 
 		for (const auto i : SMs) {
 			vkDestroyShaderModule(Device, i, nullptr);
@@ -105,8 +120,12 @@ public:
 					const std::array VBs = { VertexBuffers[0].first};
 					const std::array Offsets = { VkDeviceSize(0) };
 					vkCmdBindVertexBuffers(CB, 0, static_cast<uint32_t>(std::size(VBs)), std::data(VBs), std::data(Offsets));
+#ifdef USE_INDEX
 					vkCmdBindIndexBuffer(CB, IndexBuffers[0].first, 0, VK_INDEX_TYPE_UINT32);
 					vkCmdDrawIndexedIndirect(CB, IndirectBuffers[0].first, 0, 1, 0);
+#else
+					vkCmdDrawIndirect(CB, IndirectBuffers[0].first, 0, 1, 0);
+#endif
 				} vkCmdEndRenderPass(CB);
 			} VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
 		}
@@ -231,6 +250,9 @@ int main()
 
 	//!< ジオメトリ (Geometory)
 	TriVK.CreateGeometry();
+
+	//!< ユニフォームバッファ
+	TriVK.CreateUniformBuffer();
 
 	//!< パイプラインレイアウト (Pipeline layout)
 	TriVK.CreatePipelineLayout();

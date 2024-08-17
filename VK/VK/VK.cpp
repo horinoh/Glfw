@@ -26,6 +26,16 @@ VK::~VK()
 	for (auto i : PipelineLayouts) {
 		vkDestroyPipelineLayout(Device, i, nullptr);
 	}
+	for (auto i : DescriptorSetLayouts) {
+		vkDestroyDescriptorSetLayout(Device, i, nullptr);
+	}
+	for (auto i : Samplers) {
+		vkDestroySampler(Device, i, nullptr);
+	}
+	for (auto i : UniformBuffers) {
+		vkFreeMemory(Device, i.second, nullptr);
+		vkDestroyBuffer(Device, i.first, nullptr);
+	}
 	for (auto i : IndirectBuffers) {
 		vkFreeMemory(Device, i.second, nullptr);
 		vkDestroyBuffer(Device, i.first, nullptr);
@@ -483,7 +493,7 @@ uint32_t VK::GetMemoryTypeIndex(const uint32_t TypeBits, const VkMemoryPropertyF
 	}
 	return (std::numeric_limits<uint32_t>::max)();
 }
-void VK::CreateBuffer(VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBufferUsageFlags BUF, const VkMemoryPropertyFlagBits MPFB, const size_t Size, const void* Source) const
+void VK::CreateBuffer(VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBufferUsageFlags BUF, const VkMemoryPropertyFlags MPF, const size_t Size, const void* Source) const
 {
 	constexpr std::array<uint32_t, 0> QFI = {};
 	const VkBufferCreateInfo BCI = {
@@ -503,7 +513,7 @@ void VK::CreateBuffer(VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBu
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
 		.pNext = nullptr,
 		.allocationSize = MR.size,
-		.memoryTypeIndex = GetMemoryTypeIndex(MR.memoryTypeBits, MPFB)
+		.memoryTypeIndex = GetMemoryTypeIndex(MR.memoryTypeBits, MPF)
 	};
 	VERIFY_SUCCEEDED(vkAllocateMemory(Device, &MAI, nullptr, DeviceMemory));
 	VERIFY_SUCCEEDED(vkBindBufferMemory(Device, *Buffer, *DeviceMemory, 0));
@@ -776,51 +786,67 @@ void VK::Present()
 	VERIFY_SUCCEEDED(vkQueuePresentKHR(PresentQueue.first, &PI));
 }
 
-void VK::CreateGeometry(const std::vector<VK::SizeAndDataPtr>& Vtxs,
-	const VK::SizeAndDataPtr& Idx,
-	const uint32_t IdxCount, const uint32_t VtxCount, const uint32_t InstCount)
+void VK::CreateGeometry(const std::vector<VK::GeometryCreateInfo>& GCIs)
 {
-	//!< バーテックスバッファ、ステージングの作成 (Create vertex buffer, staging)
-	std::vector<BufferAndDeviceMemory> VertexStagingBuffers;
-	for (const auto& i : Vtxs) {
-		auto& VSB = VertexStagingBuffers.emplace_back(BufferAndDeviceMemory({ VK_NULL_HANDLE, VK_NULL_HANDLE }));
-		CreateDeviceLocalBuffer(VertexBuffers.emplace_back(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, i.first);
-		CreateHostVisibleBuffer(&VSB.first, &VSB.second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, i.first, i.second);
-	}
+	struct GeometryCreateCommand {
+		const VK::GeometryCreateInfo* GCI = nullptr;
 
-	auto IndexStagingBuffer = BufferAndDeviceMemory({ VK_NULL_HANDLE, VK_NULL_HANDLE });
-	const auto HasIdx = Idx.first != 0 && Idx.second != nullptr && IdxCount != 0;
-	if (HasIdx) {
+		std::vector<BufferAndDeviceMemory> VertexStagingBuffers = {};
+		BufferAndDeviceMemory IndexStagingBuffer = BufferAndDeviceMemory({ VK_NULL_HANDLE, VK_NULL_HANDLE });
+		BufferAndDeviceMemory IndirectStagingBuffer = BufferAndDeviceMemory({ VK_NULL_HANDLE, VK_NULL_HANDLE });
+		
+		VkDrawIndexedIndirectCommand DIIC;
+		VkDrawIndirectCommand DIC;
+
+		size_t VertexStart = 0, IndexStart = 0, IndirectStart = 0;
+	};
+	std::vector<GeometryCreateCommand> GCCs;
+
+	for (const auto& i : GCIs) {
+		auto& GCC = GCCs.emplace_back();
+		GCC.GCI = &i;
+
+		//!< バーテックスバッファ、ステージングの作成 (Create vertex buffer, staging)
+		for (const auto& i : i.Vtxs) {
+			auto& VSB = GCC.VertexStagingBuffers.emplace_back(BufferAndDeviceMemory({ VK_NULL_HANDLE, VK_NULL_HANDLE }));
+			GCC.VertexStart = std::size(VertexBuffers);
+			CreateDeviceLocalBuffer(VertexBuffers.emplace_back(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, i.first);
+			CreateHostVisibleBuffer(VSB, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, i.first, i.second);
+		}
+
 		//!< インデックスバッファ、ステージングの作成 (Create index buffer, staging)
-		CreateDeviceLocalBuffer(IndexBuffers.emplace_back(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, Idx.first);
-		CreateHostVisibleBuffer(&IndexStagingBuffer.first, &IndexStagingBuffer.second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, Idx.first, Idx.second);
+		const auto HasIdx = i.Idx.first != 0 && i.Idx.second != nullptr && i.IdxCount != 0;
+		if (HasIdx) {
+			GCC.IndexStart = std::size(IndexBuffers);
+			CreateDeviceLocalBuffer(IndexBuffers.emplace_back(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, i.Idx.first);
+			CreateHostVisibleBuffer(GCC.IndexStagingBuffer, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, i.Idx.first, i.Idx.second);
+		}
+
+		//!< インダイレクトバッファ、ステージングの作成 (Create indirect buffer, staging)
+		GCC.IndirectStart = std::size(IndirectBuffers);
+		if (HasIdx) {
+			GCC.DIIC = VkDrawIndexedIndirectCommand({
+				.indexCount = i.IdxCount,
+				.instanceCount = i.InstCount,
+				.firstIndex = 0,
+				.vertexOffset = 0,
+				.firstInstance = 0
+			});
+			CreateDeviceLocalBuffer(IndirectBuffers.emplace_back(), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sizeof(GCC.DIIC));
+			CreateHostVisibleBuffer(GCC.IndirectStagingBuffer, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(GCC.DIIC), &GCC.DIIC);
+		}
+		else {
+			GCC.DIC = VkDrawIndirectCommand({
+				.vertexCount = i.VtxCount,
+				.instanceCount = i.InstCount,
+				.firstVertex = 0,
+				.firstInstance = 0
+			});
+			CreateDeviceLocalBuffer(IndirectBuffers.emplace_back(), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sizeof(GCC.DIC));
+			CreateHostVisibleBuffer(GCC.IndirectStagingBuffer, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(GCC.DIC), &GCC.DIC);
+		}
 	}
 
-	//!< インダイレクトバッファ、ステージングの作成 (Create indirect buffer, staging)
-	auto IndirectStagingBuffer = BufferAndDeviceMemory({ VK_NULL_HANDLE, VK_NULL_HANDLE });
-	const VkDrawIndexedIndirectCommand DIIC = {
-		.indexCount = IdxCount,
-		.instanceCount = InstCount,
-		.firstIndex = 0,
-		.vertexOffset = 0,
-		.firstInstance = 0
-	};
-	const VkDrawIndirectCommand DIC = {
-		.vertexCount = VtxCount,
-		.instanceCount = InstCount,
-		.firstVertex = 0,
-		.firstInstance = 0
-	};
-	if (HasIdx) {
-		CreateDeviceLocalBuffer(IndirectBuffers.emplace_back(), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sizeof(DIIC));
-		CreateHostVisibleBuffer(&IndirectStagingBuffer.first, &IndirectStagingBuffer.second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(DIIC), &DIIC);
-	}
-	else {
-		CreateDeviceLocalBuffer(IndirectBuffers.emplace_back(), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, sizeof(DIC));
-		CreateHostVisibleBuffer(&IndirectStagingBuffer.first, &IndirectStagingBuffer.second, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(DIC), &DIC);
-	}
-
-	//!< コピーコマンド作成 (Populate copy command)
 	const auto& CB = CommandBuffers[0];
 	constexpr VkCommandBufferBeginInfo CBBI = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -828,33 +854,36 @@ void VK::CreateGeometry(const std::vector<VK::SizeAndDataPtr>& Vtxs,
 		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
 		.pInheritanceInfo = nullptr
 	};
-	constexpr auto Offset = 0;
 	VERIFY_SUCCEEDED(vkBeginCommandBuffer(CB, &CBBI)); {
-		for (auto i = 0; i < std::size(Vtxs);++i) {
-			PopulateCopyCommand(CB, VertexStagingBuffers[i].first, VertexBuffers[Offset + 0].first, Vtxs[i].first, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
-		}
-		if (HasIdx) {
-			PopulateCopyCommand(CB, IndexStagingBuffer.first, IndexBuffers[Offset + 0].first, Idx.first, VK_ACCESS_INDEX_READ_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
-			PopulateCopyCommand(CB, IndirectStagingBuffer.first, IndirectBuffers[Offset + 0].first, sizeof(DIIC), VK_ACCESS_INDIRECT_COMMAND_READ_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT);
-		}
-		else {
-			PopulateCopyCommand(CB, IndirectStagingBuffer.first, IndirectBuffers[Offset + 0].first, sizeof(DIC), VK_ACCESS_INDIRECT_COMMAND_READ_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT);
+		for (const auto& i : GCCs) {
+			for (auto j = 0; j < std::size(i.GCI->Vtxs); ++j) {
+				PopulateCopyCommand(CB, i.VertexStagingBuffers[j].first, VertexBuffers[i.VertexStart + j].first, i.GCI->Vtxs[j].first, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
+			}
+			if (VK_NULL_HANDLE != i.IndexStagingBuffer.first) {
+				PopulateCopyCommand(CB, i.IndexStagingBuffer.first, IndexBuffers[i.IndexStart].first, i.GCI->Idx.first, VK_ACCESS_INDEX_READ_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
+				PopulateCopyCommand(CB, i.IndirectStagingBuffer.first, IndirectBuffers[i.IndirectStart].first, sizeof(i.DIIC), VK_ACCESS_INDIRECT_COMMAND_READ_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT);
+			}
+			else {
+				PopulateCopyCommand(CB, i.IndirectStagingBuffer.first, IndirectBuffers[i.IndirectStart].first, sizeof(i.DIC), VK_ACCESS_INDIRECT_COMMAND_READ_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT);
+			}
 		}
 	} VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
 
 	//!< コピーコマンド発行 (Submit copy command)
 	SubmitAndWait(CB);
 
-	for (auto& i : VertexStagingBuffers) {
-		vkFreeMemory(Device, i.second, nullptr);
-		vkDestroyBuffer(Device, i.first, nullptr);
+	for (const auto& i : GCCs) {
+		for (auto& i : i.VertexStagingBuffers) {
+			vkFreeMemory(Device, i.second, nullptr);
+			vkDestroyBuffer(Device, i.first, nullptr);
+		}
+		if (VK_NULL_HANDLE != i.IndexStagingBuffer.first) {
+			vkFreeMemory(Device, i.IndexStagingBuffer.second, nullptr);
+			vkDestroyBuffer(Device, i.IndexStagingBuffer.first, nullptr);
+		}
+		vkFreeMemory(Device, i.IndirectStagingBuffer.second, nullptr);
+		vkDestroyBuffer(Device, i.IndirectStagingBuffer.first, nullptr);
 	}
-	if (HasIdx) {
-		vkFreeMemory(Device, IndexStagingBuffer.second, nullptr);
-		vkDestroyBuffer(Device, IndexStagingBuffer.first, nullptr);
-	}
-	vkFreeMemory(Device, IndirectStagingBuffer.second, nullptr);
-	vkDestroyBuffer(Device, IndirectStagingBuffer.first, nullptr);
 }
 
 void VK::CreatePipeline(VkPipeline& PL,
