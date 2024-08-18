@@ -14,6 +14,11 @@ VK::~VK()
 		VERIFY_SUCCEEDED(vkDeviceWaitIdle(Device));
 	}
 
+	for (auto i : DescriptorPools) {
+		//vkFreeDescriptorSets(Device, i, static_cast<uint32_t>(std::size(DescriptorSets)), std::data(DescriptorSets));
+		vkDestroyDescriptorPool(Device, i, nullptr);
+	}
+
 	for (auto i : Framebuffers) {
 		vkDestroyFramebuffer(Device, i, nullptr);
 	}

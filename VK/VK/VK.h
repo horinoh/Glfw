@@ -51,7 +51,7 @@ public:
 	virtual void CreateCommandBuffer();
 
 	uint32_t GetMemoryTypeIndex(const uint32_t TypeBits, const VkMemoryPropertyFlags MPF) const;
-	
+
 	void CreateBuffer(VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBufferUsageFlags BUF, const VkMemoryPropertyFlags MPF, const size_t Size, const void* Source = nullptr) const;
 	void CreateBuffer(BufferAndDeviceMemory& BADM, const VkBufferUsageFlags BUF, const VkMemoryPropertyFlags MPF, const size_t Size, const void* Source = nullptr) const {
 		CreateBuffer(&BADM.first, &BADM.second, BUF, MPF, Size, Source);
@@ -60,18 +60,18 @@ public:
 		CreateBuffer(Buffer, DeviceMemory, BUF, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, Size);
 	}
 	void CreateDeviceLocalBuffer(BufferAndDeviceMemory& BADM, const VkBufferUsageFlags BUF, const size_t Size) const { CreateDeviceLocalBuffer(&BADM.first, &BADM.second, BUF, Size); }
-	
+
 	void CreateHostVisibleBuffer(VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBufferUsageFlags BUF, const size_t Size, const void* Source) const {
 		CreateBuffer(Buffer, DeviceMemory, BUF, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, Size, Source);
 	}
 	void CreateHostVisibleBuffer(BufferAndDeviceMemory& BADM, const VkBufferUsageFlags BUF, const size_t Size, const void* Source) const { CreateHostVisibleBuffer(&BADM.first, &BADM.second, BUF, Size, Source); }
-	
+
 	void BufferMemoryBarrier(const VkCommandBuffer CB,
 		const VkBuffer Buffer,
 		const VkPipelineStageFlags SrcPSF, const VkPipelineStageFlags DstPSF,
 		const VkAccessFlags SrcAF, const VkAccessFlags DstAF) const;
 	void PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkBuffer Buffer, const size_t Size, const VkAccessFlags AF, const VkPipelineStageFlagBits PSF) const;
-	
+
 	virtual void CreateGeometry() {}
 	virtual void CreateUniformBuffer() {}
 	virtual void CreatePipelineLayout();
@@ -79,6 +79,7 @@ public:
 	VkShaderModule CreateShaderModule(const std::filesystem::path& Path);
 	virtual void CreatePipeline() {}
 	virtual void CreateFramebuffer();
+	virtual void CreateDescriptor() {}
 	virtual void CreateViewports();
 
 	virtual void PopulateCommand();
@@ -105,7 +106,7 @@ public:
 				.IdxCount = IdxCount,
 				.VtxCount = 0,
 				.InstCount = InstCount })
-		});
+			});
 	}
 	void CreateGeometry(const std::vector<SizeAndDataPtr>& Vtxs, const uint32_t VtxCount, const uint32_t InstCount) {
 		CreateGeometry({
@@ -115,7 +116,7 @@ public:
 				.IdxCount = 0,
 				.VtxCount = VtxCount,
 				.InstCount = InstCount })
-		});
+			});
 	}
 	void CreateGeometry(const SizeAndDataPtr& Vtx, const SizeAndDataPtr& Idx, const uint32_t IdxCount, const uint32_t InstCount) {
 		CreateGeometry({
@@ -125,7 +126,7 @@ public:
 				.IdxCount = IdxCount,
 				.VtxCount = 0,
 				.InstCount = InstCount })
-		});
+			});
 	}
 	void CreateGeometry(const SizeAndDataPtr& Vtx, const uint32_t VtxCount, const uint32_t InstCount) {
 		CreateGeometry({
@@ -136,17 +137,17 @@ public:
 				.VtxCount = VtxCount,
 				.InstCount = InstCount
 				})
-		});
+			});
 	}
 	void CreateGeometry(const uint32_t VtxCount, const uint32_t InstCount) {
-		CreateGeometry({ 
+		CreateGeometry({
 			VK::GeometryCreateInfo({
-				.Vtxs = {}, 
+				.Vtxs = {},
 				.Idx = SIZE_DATA_NULL,
-				.IdxCount = 0, 
-				.VtxCount = VtxCount, 
-				.InstCount = InstCount }) 
-		});
+				.IdxCount = 0,
+				.VtxCount = VtxCount,
+				.InstCount = InstCount })
+			});
 	}
 
 	void CreatePipeline(VkPipeline& PL,
@@ -173,24 +174,24 @@ public:
 		const VkPipelineLayout PLL,
 		const VkRenderPass RP);
 	//!< 頂点データによる通常メッシュ描画等
-	void CreatePipeline(VkPipeline& PL, 
+	void CreatePipeline(VkPipeline& PL,
 		const VkShaderModule VS, const VkShaderModule FS,
 		const std::vector<VkVertexInputBindingDescription>& VIBDs, const std::vector<VkVertexInputAttributeDescription>& VIADs,
 		const VkBool32 DepthEnable,
 		const VkPipelineLayout PLL,
 		const VkRenderPass RP) {
-		CreatePipeline(PL, 
+		CreatePipeline(PL,
 			VS, FS, VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE,
 			VIBDs, VIADs,
 			VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
 			0,
 			VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE,
 			DepthEnable,
-			PLL, 
+			PLL,
 			RP);
 	}
 	//!< 全画面ポリゴン描画等
-	void CreatePipeline(VkPipeline& PL, 
+	void CreatePipeline(VkPipeline& PL,
 		const VkShaderModule VS, const VkShaderModule FS,
 		const VkPipelineLayout PLL,
 		const VkRenderPass RP) {
@@ -205,7 +206,7 @@ public:
 			RP);
 	}
 	//!< テッセレーションによる描画等
-	void CreatePipeline(VkPipeline& PL, 
+	void CreatePipeline(VkPipeline& PL,
 		const VkShaderModule VS, const VkShaderModule FS, const VkShaderModule TCS, const VkShaderModule TES, const VkShaderModule GS,
 		const VkPipelineLayout PLL,
 		const VkRenderPass RP) {
@@ -270,6 +271,51 @@ public:
 		CreatePipelineLayout(PLCI);
 	}
 
+	VkDescriptorPool CreateDescriptorPool(const VkDescriptorPoolCreateInfo& DPCI) {
+		auto& DP = DescriptorPools.emplace_back();
+		VERIFY_SUCCEEDED(vkCreateDescriptorPool(Device, &DPCI, nullptr, &DP));
+		return DP;
+	}
+	VkDescriptorPool CreateDescriptorPool(const std::vector<VkDescriptorPoolSize>& DPSs) {
+		const VkDescriptorPoolCreateInfo DPCI = {
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.maxSets = std::ranges::max_element(DPSs, [](const auto& lhs, const auto& rhs) { return lhs.descriptorCount < rhs.descriptorCount; })->descriptorCount,
+			.poolSizeCount = static_cast<uint32_t>(std::size(DPSs)), .pPoolSizes = std::data(DPSs)
+		};
+		return CreateDescriptorPool(DPCI);
+	}
+
+	void AllocateDescriptorSets(const VkDescriptorSetAllocateInfo& DSAI) { VERIFY_SUCCEEDED(vkAllocateDescriptorSets(Device, &DSAI, &DescriptorSets.emplace_back())); }
+	void AllocateDescriptorSets(const VkDescriptorPool DP, const std::vector<VkDescriptorSetLayout>& DSLs) {
+		const VkDescriptorSetAllocateInfo DSAI = {
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+			.pNext = nullptr,
+			.descriptorPool = DP,
+			.descriptorSetCount = static_cast<uint32_t>(std::size(DSLs)), .pSetLayouts = std::data(DSLs)
+		};
+		AllocateDescriptorSets(DSAI);
+	}
+
+	VkDescriptorUpdateTemplate CreateDescriptorUpdateTemplate(VkDescriptorUpdateTemplate& DUT, const VkDescriptorUpdateTemplateCreateInfo& DUTCI) {
+		VERIFY_SUCCEEDED(vkCreateDescriptorUpdateTemplate(Device, &DUTCI, nullptr, &DUT));
+		return DUT;
+	}
+	VkDescriptorUpdateTemplate CreateDescriptorUpdateTemplate(VkDescriptorUpdateTemplate &DUT, const std::vector<VkDescriptorUpdateTemplateEntry>& DUTEs, const VkDescriptorSetLayout DSL) {
+		const VkDescriptorUpdateTemplateCreateInfo DUTCI = {
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_UPDATE_TEMPLATE_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.descriptorUpdateEntryCount = static_cast<uint32_t>(std::size(DUTEs)), .pDescriptorUpdateEntries = std::data(DUTEs),
+			.templateType = VK_DESCRIPTOR_UPDATE_TEMPLATE_TYPE_DESCRIPTOR_SET,
+			.descriptorSetLayout = DSL,
+			.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+			.pipelineLayout = VK_NULL_HANDLE, .set = 0
+		};
+		return CreateDescriptorUpdateTemplate(DUT, DUTCI);
+	}
+
 	virtual void SubmitAndWait(const VkCommandBuffer CB);
 
 protected:
@@ -323,6 +369,9 @@ protected:
 	std::vector<VkPipeline> Pipelines;
 
 	std::vector<VkFramebuffer> Framebuffers;
+
+	std::vector<VkDescriptorPool> DescriptorPools;
+	std::vector<VkDescriptorSet> DescriptorSets;
 
 	std::vector<VkViewport> Viewports;
 	std::vector<VkRect2D> ScissorRects;
