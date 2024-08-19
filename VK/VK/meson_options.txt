@@ -1,1 +1,2 @@
 option('GLM', type : 'string', value : '', description : 'GLM SDK')
+option('GLI', type : 'string', value : '', description : 'GLI SDK')

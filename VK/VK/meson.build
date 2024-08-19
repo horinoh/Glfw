@@ -6,10 +6,12 @@ project('Glfw', 'cpp',
 
 # setup の引数として指定する
 GLM = get_option('GLM')
+GLI = get_option('GLI')
 
 # 追加のインクルード
 Inc = [ 
         include_directories(GLM),
+        include_directories(GLI),
 ]
 
 # 追加のライブラリ

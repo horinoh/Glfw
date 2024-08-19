@@ -254,6 +254,9 @@ int main()
 	//!< ユニフォームバッファ
 	TriVK.CreateUniformBuffer();
 
+	//!< テクスチャ
+	TriVK.CreateTexture();
+
 	//!< パイプラインレイアウト (Pipeline layout)
 	TriVK.CreatePipelineLayout();
 

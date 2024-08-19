@@ -5,6 +5,7 @@ project('Glfw', 'cpp',
 # get_option() で取得する値は、setup の引数として指定する
 GLFW = get_option('GLFW')
 GLM = get_option('GLM')
+GLI = get_option('GLI')
 VK = '..' / '..' / 'VK' / 'VK'
 
 # OS によるライブラリ名の違い
@@ -22,6 +23,7 @@ endif
 Inc = [ 
         include_directories(GLFW / 'include'),
         include_directories(GLM),
+        include_directories(GLI),
         include_directories(VK),
 ]
 

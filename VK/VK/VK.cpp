@@ -37,6 +37,11 @@ VK::~VK()
 	for (auto i : Samplers) {
 		vkDestroySampler(Device, i, nullptr);
 	}
+	for (auto i : Textures) {
+		vkFreeMemory(Device, i.second, nullptr);
+		vkDestroyImageView(Device, i.first.second, nullptr);
+		vkDestroyImage(Device, i.first.first, nullptr);
+	}
 	for (auto i : UniformBuffers) {
 		vkFreeMemory(Device, i.second, nullptr);
 		vkDestroyBuffer(Device, i.first, nullptr);
