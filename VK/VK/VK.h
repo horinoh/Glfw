@@ -71,6 +71,13 @@ public:
 	}
 	void CreateHostVisibleBuffer(BufferAndDeviceMemory& BADM, const VkBufferUsageFlags BUF, const size_t Size, const void* Source) const { CreateHostVisibleBuffer(&BADM.first, &BADM.second, BUF, Size, Source); }
 
+	void CreateImage(VkImage* Image, VkDeviceMemory* DeviceMemory, const VkImageCreateInfo& ICI);
+	void CreateImageView(VkImageView* ImageView, const VkImageViewCreateInfo& IVCI) { VERIFY_SUCCEEDED(vkCreateImageView(Device, &IVCI, nullptr, ImageView)); }
+	void CreateImageAndView(VkImage* Image, VkDeviceMemory* DeviceMemory, VkImageView* ImageView, const VkImageCreateInfo& ICI, const VkImageViewCreateInfo& IVCI) {
+		CreateImage(Image, DeviceMemory, ICI);
+		CreateImageView(ImageView, IVCI);
+	}
+
 	void BufferMemoryBarrier(const VkCommandBuffer CB,
 		const VkBuffer Buffer,
 		const VkPipelineStageFlags SrcPSF, const VkPipelineStageFlags DstPSF,
@@ -156,80 +163,8 @@ public:
 			});
 	}
 
-#if 0
-	void CreateImage(const VkImageCreateInfo& ICI) {
-		auto& Tex = Textures.emplace_back();
-
-		auto& Image = Textures.back().first.first;
-		VERIFY_SUCCEEDED(vkCreateImage(Device, &ICI, nullptr, &Image));
-		
-		//!< イメージメモリを確保してバインド
-		auto& DevMem = Textures.back().second;
-		VkMemoryRequirements MR;
-		vkGetImageMemoryRequirements(Device, Image, &MR);
-		const VkMemoryAllocateInfo MAI = {
-			.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-			.pNext = nullptr,
-			.allocationSize = MR.size,
-			.memoryTypeIndex = GetMemoryTypeIndex(MR.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-		};
-		VERIFY_SUCCEEDED(vkAllocateMemory(Device, &MAI, nullptr, &DevMem));
-		VERIFY_SUCCEEDED(vkBindImageMemory(Device, Image, DevMem, 0));
-	}
-	void CreateView(const VkImageViewCreateInfo& IVCI) {
-		auto& View = Textures.back().first.second;
-		VERIFY_SUCCEEDED(vkCreateImageView(Device, &IVCI, nullptr, &View));
-	}
-	void CreateGLI(const std::filesystem::path& Path) {
-		auto Gli = gli::load(std::data(Path.string()));
-
-		const VkImageCreateInfo ICI = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-			.pNext = nullptr,
-			.flags = gli::is_target_cube(Gli.target()) ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : static_cast<VkImageCreateFlags>(0),
-			.imageType = VK_IMAGE_TYPE_2D, // from Gli.target()
-			.format = VK_FORMAT_R8G8B8_UNORM, // from Gli.format()
-			.extent = VkExtent3D({
-				.width = static_cast<const uint32_t>(Gli.extent(0).x),
-				.height = static_cast<const uint32_t>(Gli.extent(0).y), 
-				.depth = static_cast<const uint32_t>(Gli.extent(0).z)
-			}),
-			.mipLevels = static_cast<const uint32_t>(Gli.levels()),
-			.arrayLayers = static_cast<const uint32_t>(Gli.layers()) * static_cast<const uint32_t>(Gli.faces()),
-			.samples = VK_SAMPLE_COUNT_1_BIT,
-			.tiling = VK_IMAGE_TILING_OPTIMAL,
-			.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-			//.queueFamilyIndexCount = static_cast<uint32_t>(std::size(QueueFamilyIndices)), .pQueueFamilyIndices = std::data(QueueFamilyIndices),
-			.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
-		};
-		CreateImage(ICI);
-
-		const auto Image = Textures.back().first.first;
-		const VkImageViewCreateInfo IVCI = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-			.pNext = nullptr,
-			.flags = 0,
-			.image = Image,
-			.viewType = VK_IMAGE_VIEW_TYPE_2D, // from Gli.target()
-			.format = VK_FORMAT_R8G8B8_UNORM, // from Gli.format()
-			.components = VkComponentMapping({ // from Gli.swizzles()
-				.r = VK_COMPONENT_SWIZZLE_R,
-				.g = VK_COMPONENT_SWIZZLE_G,
-				.b = VK_COMPONENT_SWIZZLE_B,
-				.a = VK_COMPONENT_SWIZZLE_A
-			}),
-			.subresourceRange = VkImageSubresourceRange({
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.baseMipLevel = 0,
-				.levelCount = VK_REMAINING_MIP_LEVELS,
-				.baseArrayLayer = 0,
-				.layerCount = VK_REMAINING_ARRAY_LAYERS
-			})
-		};
-		CreateView(IVCI);
-	}
-#endif
+	void CreateTexture(const VkFormat Format, const uint32_t Width, const uint32_t Height);
+	void CreateGLITexture(const std::filesystem::path& Path);
 
 	void CreatePipeline(VkPipeline& PL,
 		const std::vector<VkPipelineShaderStageCreateInfo>& PSSCIs,

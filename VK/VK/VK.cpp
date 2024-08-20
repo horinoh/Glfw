@@ -548,6 +548,23 @@ void VK::CreateBuffer(VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBu
 		} vkUnmapMemory(Device, *DeviceMemory);
 	}
 }
+
+void VK::CreateImage(VkImage* Image, VkDeviceMemory* DeviceMemory, const VkImageCreateInfo& ICI) 
+{
+	VERIFY_SUCCEEDED(vkCreateImage(Device, &ICI, nullptr, Image));
+
+	VkMemoryRequirements MR;
+	vkGetImageMemoryRequirements(Device, *Image, &MR);
+	const VkMemoryAllocateInfo MAI = {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+		.pNext = nullptr,
+		.allocationSize = MR.size,
+		.memoryTypeIndex = GetMemoryTypeIndex(MR.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+	};
+	VERIFY_SUCCEEDED(vkAllocateMemory(Device, &MAI, nullptr, DeviceMemory));
+	VERIFY_SUCCEEDED(vkBindImageMemory(Device, *Image, *DeviceMemory, 0));
+}
+
 void VK::BufferMemoryBarrier(const VkCommandBuffer CB,
 	const VkBuffer Buffer,
 	const VkPipelineStageFlags SrcPSF, const VkPipelineStageFlags DstPSF,
@@ -894,6 +911,105 @@ void VK::CreateGeometry(const std::vector<VK::GeometryCreateInfo>& GCIs)
 		vkFreeMemory(Device, i.IndirectStagingBuffer.second, nullptr);
 		vkDestroyBuffer(Device, i.IndirectStagingBuffer.first, nullptr);
 	}
+}
+
+void VK::CreateTexture(const VkFormat Format, const uint32_t Width, const uint32_t Height) 
+{
+	auto& Tex = Textures.emplace_back();
+	auto& Image = Tex.first.first;
+	auto& ImageView = Tex.first.second;
+	auto& DeviceMemory = Tex.second;
+
+	constexpr std::array<uint32_t, 0> QFIs = {};
+	const VkImageCreateInfo ICI = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.imageType = VK_IMAGE_TYPE_2D,
+		.format = Format,
+		.extent = VkExtent3D({.width = Width, .height = Height, .depth = 1 }),
+		.mipLevels = 1, .arrayLayers = 1,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.tiling = VK_IMAGE_TILING_OPTIMAL,
+		.usage = VK_IMAGE_USAGE_SAMPLED_BIT,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		.queueFamilyIndexCount = static_cast<uint32_t>(std::size(QFIs)), .pQueueFamilyIndices = std::data(QFIs),
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+	};
+	const VkImageViewCreateInfo IVCI = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.image = Image,
+		.viewType = VK_IMAGE_VIEW_TYPE_2D,
+		.format = Format,
+		.components = VkComponentMapping({
+			.r = VK_COMPONENT_SWIZZLE_R,
+			.g = VK_COMPONENT_SWIZZLE_G,
+			.b = VK_COMPONENT_SWIZZLE_B,
+			.a = VK_COMPONENT_SWIZZLE_A
+		}),
+		.subresourceRange = VkImageSubresourceRange({
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.baseMipLevel = 0,
+			.levelCount = VK_REMAINING_MIP_LEVELS,
+			.baseArrayLayer = 0,
+			.layerCount = VK_REMAINING_ARRAY_LAYERS
+		})
+	};
+	CreateImageAndView(&Image, &DeviceMemory, &ImageView, ICI, IVCI);
+}
+void VK::CreateGLITexture(const std::filesystem::path& Path) 
+{
+	auto& Tex = Textures.emplace_back();
+	auto& Image = Tex.first.first;
+	auto& ImageView = Tex.first.second;
+	auto& DeviceMemory = Tex.second;
+
+	auto Gli = gli::load(std::data(Path.string()));
+	constexpr std::array<uint32_t, 0> QFIs = {};
+	const VkImageCreateInfo ICI = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = gli::is_target_cube(Gli.target()) ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : static_cast<VkImageCreateFlags>(0),
+		.imageType = VK_IMAGE_TYPE_2D, // from Gli.target()
+		.format = VK_FORMAT_R8G8B8_UNORM, // from Gli.format()
+		.extent = VkExtent3D({
+			.width = static_cast<const uint32_t>(Gli.extent(0).x),
+			.height = static_cast<const uint32_t>(Gli.extent(0).y),
+			.depth = static_cast<const uint32_t>(Gli.extent(0).z)
+		}),
+		.mipLevels = static_cast<const uint32_t>(Gli.levels()),
+		.arrayLayers = static_cast<const uint32_t>(Gli.layers()) * static_cast<const uint32_t>(Gli.faces()),
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.tiling = VK_IMAGE_TILING_OPTIMAL,
+		.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		.queueFamilyIndexCount = static_cast<uint32_t>(std::size(QFIs)), .pQueueFamilyIndices = std::data(QFIs),
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+	};
+	const VkImageViewCreateInfo IVCI = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.image = Image,
+		.viewType = VK_IMAGE_VIEW_TYPE_2D, // from Gli.target()
+		.format = VK_FORMAT_R8G8B8_UNORM, // from Gli.format()
+		.components = VkComponentMapping({ // from Gli.swizzles()
+			.r = VK_COMPONENT_SWIZZLE_R,
+			.g = VK_COMPONENT_SWIZZLE_G,
+			.b = VK_COMPONENT_SWIZZLE_B,
+			.a = VK_COMPONENT_SWIZZLE_A
+		}),
+		.subresourceRange = VkImageSubresourceRange({
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.baseMipLevel = 0,
+			.levelCount = VK_REMAINING_MIP_LEVELS,
+			.baseArrayLayer = 0,
+			.layerCount = VK_REMAINING_ARRAY_LAYERS
+		})
+	};
+	CreateImageAndView(&Image, &DeviceMemory, &ImageView, ICI, IVCI);
 }
 
 void VK::CreatePipeline(VkPipeline& PL,
