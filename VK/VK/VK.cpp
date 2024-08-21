@@ -92,57 +92,6 @@ VK::~VK()
 	}
 }
 
-void VK::CreateInstance(std::vector<const char*>& Extensions)
-{
-	constexpr VkApplicationInfo AI = {
-		.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-		.pNext = nullptr,
-		.pApplicationName = "VK App Name", .applicationVersion = VK_HEADER_VERSION_COMPLETE,
-		.pEngineName = "VK Engine Name", .engineVersion = VK_HEADER_VERSION_COMPLETE,
-		.apiVersion = VK_HEADER_VERSION_COMPLETE
-	};
-	const std::array Layers = {
-		"VK_LAYER_KHRONOS_validation",
-	};
-#ifdef _DEBUG
-	Extensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-	Extensions.emplace_back(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
-#endif
-	const VkInstanceCreateInfo ICI = {
-		.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-		.pNext = nullptr,
-		.flags = 0,
-		.pApplicationInfo = &AI,
-		.enabledLayerCount = static_cast<uint32_t>(std::size(Layers)), .ppEnabledLayerNames = std::data(Layers),
-		.enabledExtensionCount = static_cast<uint32_t>(std::size(Extensions)), .ppEnabledExtensionNames = std::data(Extensions)
-	};
-	VERIFY_SUCCEEDED(vkCreateInstance(&ICI, nullptr, &Instance));
-
-#ifdef _DEBUG
-	VkDebugUtilsMessengerEXT DebugUtilsMessenger = VK_NULL_HANDLE;
-	vkCreateDebugUtilsMessenger = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(Instance, "vkCreateDebugUtilsMessengerEXT"));
-	vkDestroyDebugUtilsMessenger = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(Instance, "vkDestroyDebugUtilsMessengerEXT"));
-	{
-		constexpr VkDebugUtilsMessengerCreateInfoEXT DUMCI = {
-			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-			.pNext = nullptr,
-			.flags = 0,
-			.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
-			.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT,
-			.pfnUserCallback = [](VkDebugUtilsMessageSeverityFlagBitsEXT DUMSFB, [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT DUMTF, [[maybe_unused]] const VkDebugUtilsMessengerCallbackDataEXT* DUMCD, [[maybe_unused]] void* UserData) {
-				if (DUMSFB >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-					std::cerr << DUMCD->pMessage << std::endl;
-					return VK_TRUE;
-				}
-				return VK_FALSE;
-			},
-			.pUserData = nullptr
-		};
-		VERIFY_SUCCEEDED(vkCreateDebugUtilsMessenger(Instance, &DUMCI, nullptr, &DebugUtilsMessenger));
-	}
-#endif
-}
-
 void VK::SelectPhysicalDevice() 
 {
 	std::vector<VkPhysicalDevice> PhysicalDevices;
@@ -364,6 +313,7 @@ void VK::CreateDevice()
 
 void VK::CreateFence()
 {
+	//!< フェンスをシグナル状態で作成 (Fence, create as signaled) CPU - GPU
 	constexpr VkFenceCreateInfo FCI = {
 		.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
 		.pNext = nullptr,
@@ -389,88 +339,6 @@ void VK::CreateSemaphore()
 	VERIFY_SUCCEEDED(vkCreateSemaphore(Device, &SCI, nullptr, &RenderFinishedSemaphore));
 }
 
-void VK::CreateSwapchain(const uint32_t Width, const uint32_t Height)
-{
-	VkSurfaceCapabilitiesKHR SC;
-	VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(SelectedPhysDevice.first, Surface, &SC));
-
-	Swapchain.Extent = 0xffffffff != SC.currentExtent.width ? SC.currentExtent : VkExtent2D({ .width = (std::clamp)(Width, SC.maxImageExtent.width, SC.minImageExtent.width), .height = (std::clamp)(Height, SC.minImageExtent.height, SC.minImageExtent.height) });
-
-	std::vector<uint32_t> QueueFamilyIndices;
-	if (GraphicsQueue.second != PresentQueue.second) {
-		QueueFamilyIndices.emplace_back(GraphicsQueue.second);
-		QueueFamilyIndices.emplace_back(PresentQueue.second);
-	}
-
-	VkPresentModeKHR SelectedPresentMode;
-	{
-		uint32_t Count;
-		VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfacePresentModesKHR(SelectedPhysDevice.first, Surface, &Count, nullptr));
-		std::vector<VkPresentModeKHR> PMs(Count);
-		VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfacePresentModesKHR(SelectedPhysDevice.first, Surface, &Count, std::data(PMs)));
-
-		//!< MAILBOX がサポートされるなら採用する (Select if MAILBOX supported)
-		auto It = std::ranges::find(PMs, VK_PRESENT_MODE_MAILBOX_KHR);
-		if (It == std::end(PMs)) {
-			//!< 見つからない場合は FIFO (FIFO は必ずサポートされる)
-			It = std::ranges::find(PMs, VK_PRESENT_MODE_FIFO_KHR);
-		}
-		SelectedPresentMode = *It;
-	}
-
-	const VkSwapchainCreateInfoKHR SCI = {
-		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-		.pNext = nullptr,
-		.flags = 0,
-		.surface = Surface,
-		//!< イメージ数は最小 + 1 を希望 (Want minImageCount + 1)
-		.minImageCount = (std::min)(SC.minImageCount + 1, 0 == SC.maxImageCount ? (std::numeric_limits<uint32_t>::max)() : SC.maxImageCount),
-		.imageFormat = SelectedSurfaceFormat.format, .imageColorSpace = SelectedSurfaceFormat.colorSpace,
-		.imageExtent = Swapchain.Extent,
-		.imageArrayLayers = 1,
-		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-		.imageSharingMode = std::empty(QueueFamilyIndices) ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT,
-		.queueFamilyIndexCount = static_cast<uint32_t>(std::size(QueueFamilyIndices)), .pQueueFamilyIndices = std::data(QueueFamilyIndices),
-		.preTransform = (VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR & SC.supportedTransforms) ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR : SC.currentTransform,
-		.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-		.presentMode = SelectedPresentMode,
-		.clipped = VK_TRUE,
-		.oldSwapchain = VK_NULL_HANDLE
-	};
-	VERIFY_SUCCEEDED(vkCreateSwapchainKHR(Device, &SCI, nullptr, &Swapchain.VkSwapchain));
-
-	//!< イメージビュー (Image views)
-	{
-		std::vector<VkImage> Images;
-		uint32_t Count;
-		VERIFY_SUCCEEDED(vkGetSwapchainImagesKHR(Device, Swapchain.VkSwapchain, &Count, nullptr));
-		Images.resize(Count);
-		VERIFY_SUCCEEDED(vkGetSwapchainImagesKHR(Device, Swapchain.VkSwapchain, &Count, std::data(Images)));
-
-		Swapchain.ImageAndViews.reserve(Count);
-		for (const auto& i : Images) {
-			const VkImageViewCreateInfo IVCI = {
-				.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-				.pNext = nullptr,
-				.flags = 0,
-				.image = i,
-				.viewType = VK_IMAGE_VIEW_TYPE_2D,
-				.format = SelectedSurfaceFormat.format,
-				.components = VkComponentMapping({.r = VK_COMPONENT_SWIZZLE_IDENTITY, .g = VK_COMPONENT_SWIZZLE_IDENTITY, .b = VK_COMPONENT_SWIZZLE_IDENTITY, .a = VK_COMPONENT_SWIZZLE_IDENTITY, }),
-				.subresourceRange = VkImageSubresourceRange({
-					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-					.baseMipLevel = 0, .levelCount = 1,
-					.baseArrayLayer = 0, .layerCount = 1
-				})
-			};
-			VkImageView IV;
-			VERIFY_SUCCEEDED(vkCreateImageView(Device, &IVCI, nullptr, &IV));
-
-			Swapchain.ImageAndViews.emplace_back(ImageAndView({ i, IV }));
-		}
-	}
-}
-
 void VK::CreateCommandBuffer()
 {
 	const VkCommandPoolCreateInfo CPCI = {
@@ -490,119 +358,6 @@ void VK::CreateCommandBuffer()
 		.commandBufferCount = static_cast<uint32_t>(std::size(CommandBuffers))
 	};
 	VERIFY_SUCCEEDED(vkAllocateCommandBuffers(Device, &CBAI, std::data(CommandBuffers)));
-}
-
-uint32_t VK::GetMemoryTypeIndex(const uint32_t TypeBits, const VkMemoryPropertyFlags MPF) const
-{
-	for (uint32_t i = 0; i < SelectedPhysDevice.second.PDMP.memoryTypeCount; ++i) {
-		if (TypeBits & (1 << i)) {
-			if ((SelectedPhysDevice.second.PDMP.memoryTypes[i].propertyFlags & MPF) == MPF) {
-				return i;
-			}
-		}
-	}
-	return (std::numeric_limits<uint32_t>::max)();
-}
-void VK::CreateBuffer(VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBufferUsageFlags BUF, const VkMemoryPropertyFlags MPF, const size_t Size, const void* Source) const
-{
-	constexpr std::array<uint32_t, 0> QFI = {};
-	const VkBufferCreateInfo BCI = {
-		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		.pNext = nullptr,
-		.flags = 0,
-		.size = Size,
-		.usage = BUF,
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-		.queueFamilyIndexCount = static_cast<uint32_t>(std::size(QFI)), .pQueueFamilyIndices = std::data(QFI)
-	};
-	VERIFY_SUCCEEDED(vkCreateBuffer(Device, &BCI, nullptr, Buffer));
-
-	VkMemoryRequirements MR;
-	vkGetBufferMemoryRequirements(Device, *Buffer, &MR);
-	const VkMemoryAllocateInfo MAI = {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		.pNext = nullptr,
-		.allocationSize = MR.size,
-		.memoryTypeIndex = GetMemoryTypeIndex(MR.memoryTypeBits, MPF)
-	};
-	VERIFY_SUCCEEDED(vkAllocateMemory(Device, &MAI, nullptr, DeviceMemory));
-	VERIFY_SUCCEEDED(vkBindBufferMemory(Device, *Buffer, *DeviceMemory, 0));
-
-	if (nullptr != Source) {
-		constexpr auto MapSize = VK_WHOLE_SIZE;
-		void* Data;
-		VERIFY_SUCCEEDED(vkMapMemory(Device, *DeviceMemory, 0, MapSize, static_cast<VkMemoryMapFlags>(0), &Data)); {
-			memcpy(Data, Source, Size);
-			//!< メモリコンテンツが変更されたことを明示的にドライバへ知らせる(vkMapMemory()した状態でやること)
-			if (!(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT & BUF)) {
-				const std::array MMRs = {
-					VkMappedMemoryRange({
-						.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-						.pNext = nullptr,
-						.memory = *DeviceMemory,
-						.offset = 0, .size = MapSize
-					}),
-				};
-				VERIFY_SUCCEEDED(vkFlushMappedMemoryRanges(Device, static_cast<uint32_t>(std::size(MMRs)), std::data(MMRs)));
-			}
-		} vkUnmapMemory(Device, *DeviceMemory);
-	}
-}
-
-void VK::CreateImage(VkImage* Image, VkDeviceMemory* DeviceMemory, const VkImageCreateInfo& ICI) 
-{
-	VERIFY_SUCCEEDED(vkCreateImage(Device, &ICI, nullptr, Image));
-
-	VkMemoryRequirements MR;
-	vkGetImageMemoryRequirements(Device, *Image, &MR);
-	const VkMemoryAllocateInfo MAI = {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		.pNext = nullptr,
-		.allocationSize = MR.size,
-		.memoryTypeIndex = GetMemoryTypeIndex(MR.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-	};
-	VERIFY_SUCCEEDED(vkAllocateMemory(Device, &MAI, nullptr, DeviceMemory));
-	VERIFY_SUCCEEDED(vkBindImageMemory(Device, *Image, *DeviceMemory, 0));
-}
-
-void VK::BufferMemoryBarrier(const VkCommandBuffer CB,
-	const VkBuffer Buffer,
-	const VkPipelineStageFlags SrcPSF, const VkPipelineStageFlags DstPSF,
-	const VkAccessFlags SrcAF, const VkAccessFlags DstAF) const
-{
-	constexpr std::array<VkMemoryBarrier2, 0> MBs = {};
-	const std::array BMBs = {
-		VkBufferMemoryBarrier2({
-			.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
-			.pNext = nullptr,
-			.srcStageMask = SrcPSF, .srcAccessMask = SrcAF, .dstStageMask = DstPSF, .dstAccessMask = DstAF,
-			.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-			.buffer = Buffer, .offset = 0, .size = VK_WHOLE_SIZE
-		}),
-	};
-	constexpr std::array<VkImageMemoryBarrier2, 0> IMBs = {};
-	const VkDependencyInfo DI = {
-		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-		.pNext = nullptr,
-		.dependencyFlags = 0,
-		.memoryBarrierCount = static_cast<uint32_t>(std::size(MBs)), .pMemoryBarriers = std::data(MBs),
-		.bufferMemoryBarrierCount = static_cast<uint32_t>(std::size(BMBs)), .pBufferMemoryBarriers = std::data(BMBs),
-		.imageMemoryBarrierCount = static_cast<uint32_t>(std::size(IMBs)), .pImageMemoryBarriers = std::data(IMBs),
-	};
-	vkCmdPipelineBarrier2(CB, &DI);
-}
-void VK::PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkBuffer Buffer, const size_t Size, const VkAccessFlags AF, const VkPipelineStageFlagBits PSF) const
-{
-	BufferMemoryBarrier(CB, Buffer,
-		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-		0, VK_ACCESS_MEMORY_WRITE_BIT);
-	{
-		const std::array BCs = { VkBufferCopy({.srcOffset = 0, .dstOffset = 0, .size = Size }), };
-		vkCmdCopyBuffer(CB, Staging, Buffer, static_cast<uint32_t>(std::size(BCs)), std::data(BCs));
-	}
-	BufferMemoryBarrier(CB, Buffer,
-		VK_PIPELINE_STAGE_TRANSFER_BIT, PSF,
-		VK_ACCESS_MEMORY_WRITE_BIT, AF);
 }
 
 void VK::CreatePipelineLayout()
@@ -813,6 +568,257 @@ void VK::Present()
 	VERIFY_SUCCEEDED(vkQueuePresentKHR(PresentQueue.first, &PI));
 }
 
+void VK::CreateInstance(const std::vector<const char*>& Extensions)
+{
+	constexpr VkApplicationInfo AI = {
+		.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+		.pNext = nullptr,
+		.pApplicationName = "VK App Name", .applicationVersion = VK_HEADER_VERSION_COMPLETE,
+		.pEngineName = "VK Engine Name", .engineVersion = VK_HEADER_VERSION_COMPLETE,
+		.apiVersion = VK_HEADER_VERSION_COMPLETE
+	};
+#ifdef _DEBUG
+	const std::array LayersD = { "VK_LAYER_KHRONOS_validation" };
+	auto ExtensionsD(Extensions);
+	ExtensionsD.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+	ExtensionsD.emplace_back(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
+#else
+	constexpr std::array<const char*, 0> Layers = {};
+#endif
+	const VkInstanceCreateInfo ICI = {
+		.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.pApplicationInfo = &AI,
+#ifdef _DEBUG
+		.enabledLayerCount = static_cast<uint32_t>(std::size(LayersD)), .ppEnabledLayerNames = std::data(LayersD),
+		.enabledExtensionCount = static_cast<uint32_t>(std::size(ExtensionsD)), .ppEnabledExtensionNames = std::data(ExtensionsD)
+#else
+		.enabledLayerCount = static_cast<uint32_t>(std::size(Layers)), .ppEnabledLayerNames = std::data(Layers),
+		.enabledExtensionCount = static_cast<uint32_t>(std::size(Extensions)), .ppEnabledExtensionNames = std::data(Extensions)
+#endif
+	};
+	VERIFY_SUCCEEDED(vkCreateInstance(&ICI, nullptr, &Instance));
+
+#ifdef _DEBUG
+	VkDebugUtilsMessengerEXT DebugUtilsMessenger = VK_NULL_HANDLE;
+	vkCreateDebugUtilsMessenger = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(Instance, "vkCreateDebugUtilsMessengerEXT"));
+	vkDestroyDebugUtilsMessenger = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(Instance, "vkDestroyDebugUtilsMessengerEXT"));
+	{
+		constexpr VkDebugUtilsMessengerCreateInfoEXT DUMCI = {
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+			.pNext = nullptr,
+			.flags = 0,
+			.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+			.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT,
+			.pfnUserCallback = [](VkDebugUtilsMessageSeverityFlagBitsEXT DUMSFB, [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT DUMTF, [[maybe_unused]] const VkDebugUtilsMessengerCallbackDataEXT* DUMCD, [[maybe_unused]] void* UserData) {
+				if (DUMSFB >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+					std::cerr << DUMCD->pMessage << std::endl;
+					return VK_TRUE;
+				}
+				return VK_FALSE;
+			},
+			.pUserData = nullptr
+		};
+		VERIFY_SUCCEEDED(vkCreateDebugUtilsMessenger(Instance, &DUMCI, nullptr, &DebugUtilsMessenger));
+	}
+#endif
+}
+void VK::CreateSwapchain(const uint32_t Width, const uint32_t Height)
+{
+	VkSurfaceCapabilitiesKHR SC;
+	VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(SelectedPhysDevice.first, Surface, &SC));
+
+	Swapchain.Extent = 0xffffffff != SC.currentExtent.width ? SC.currentExtent : VkExtent2D({ .width = (std::clamp)(Width, SC.maxImageExtent.width, SC.minImageExtent.width), .height = (std::clamp)(Height, SC.minImageExtent.height, SC.minImageExtent.height) });
+
+	std::vector<uint32_t> QueueFamilyIndices;
+	if (GraphicsQueue.second != PresentQueue.second) {
+		QueueFamilyIndices.emplace_back(GraphicsQueue.second);
+		QueueFamilyIndices.emplace_back(PresentQueue.second);
+	}
+
+	VkPresentModeKHR SelectedPresentMode;
+	{
+		uint32_t Count;
+		VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfacePresentModesKHR(SelectedPhysDevice.first, Surface, &Count, nullptr));
+		std::vector<VkPresentModeKHR> PMs(Count);
+		VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfacePresentModesKHR(SelectedPhysDevice.first, Surface, &Count, std::data(PMs)));
+
+		//!< MAILBOX がサポートされるなら採用する (Select if MAILBOX supported)
+		auto It = std::ranges::find(PMs, VK_PRESENT_MODE_MAILBOX_KHR);
+		if (It == std::end(PMs)) {
+			//!< 見つからない場合は FIFO (FIFO は必ずサポートされる)
+			It = std::ranges::find(PMs, VK_PRESENT_MODE_FIFO_KHR);
+		}
+		SelectedPresentMode = *It;
+	}
+
+	const VkSwapchainCreateInfoKHR SCI = {
+		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+		.pNext = nullptr,
+		.flags = 0,
+		.surface = Surface,
+		//!< イメージ数は最小 + 1 を希望 (Want minImageCount + 1)
+		.minImageCount = (std::min)(SC.minImageCount + 1, 0 == SC.maxImageCount ? (std::numeric_limits<uint32_t>::max)() : SC.maxImageCount),
+		.imageFormat = SelectedSurfaceFormat.format, .imageColorSpace = SelectedSurfaceFormat.colorSpace,
+		.imageExtent = Swapchain.Extent,
+		.imageArrayLayers = 1,
+		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+		.imageSharingMode = std::empty(QueueFamilyIndices) ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT,
+		.queueFamilyIndexCount = static_cast<uint32_t>(std::size(QueueFamilyIndices)), .pQueueFamilyIndices = std::data(QueueFamilyIndices),
+		.preTransform = (VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR & SC.supportedTransforms) ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR : SC.currentTransform,
+		.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+		.presentMode = SelectedPresentMode,
+		.clipped = VK_TRUE,
+		.oldSwapchain = VK_NULL_HANDLE
+	};
+	VERIFY_SUCCEEDED(vkCreateSwapchainKHR(Device, &SCI, nullptr, &Swapchain.VkSwapchain));
+
+	//!< イメージビュー (Image views)
+	{
+		std::vector<VkImage> Images;
+		uint32_t Count;
+		VERIFY_SUCCEEDED(vkGetSwapchainImagesKHR(Device, Swapchain.VkSwapchain, &Count, nullptr));
+		Images.resize(Count);
+		VERIFY_SUCCEEDED(vkGetSwapchainImagesKHR(Device, Swapchain.VkSwapchain, &Count, std::data(Images)));
+
+		Swapchain.ImageAndViews.reserve(Count);
+		for (const auto& i : Images) {
+			const VkImageViewCreateInfo IVCI = {
+				.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+				.pNext = nullptr,
+				.flags = 0,
+				.image = i,
+				.viewType = VK_IMAGE_VIEW_TYPE_2D,
+				.format = SelectedSurfaceFormat.format,
+				.components = VkComponentMapping({.r = VK_COMPONENT_SWIZZLE_IDENTITY, .g = VK_COMPONENT_SWIZZLE_IDENTITY, .b = VK_COMPONENT_SWIZZLE_IDENTITY, .a = VK_COMPONENT_SWIZZLE_IDENTITY, }),
+				.subresourceRange = VkImageSubresourceRange({
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.baseMipLevel = 0, .levelCount = 1,
+					.baseArrayLayer = 0, .layerCount = 1
+				})
+			};
+			VkImageView IV;
+			VERIFY_SUCCEEDED(vkCreateImageView(Device, &IVCI, nullptr, &IV));
+
+			Swapchain.ImageAndViews.emplace_back(ImageAndView({ i, IV }));
+		}
+	}
+}
+
+uint32_t VK::GetMemoryTypeIndex(const uint32_t TypeBits, const VkMemoryPropertyFlags MPF) const
+{
+	for (uint32_t i = 0; i < SelectedPhysDevice.second.PDMP.memoryTypeCount; ++i) {
+		if (TypeBits & (1 << i)) {
+			if ((SelectedPhysDevice.second.PDMP.memoryTypes[i].propertyFlags & MPF) == MPF) {
+				return i;
+			}
+		}
+	}
+	return (std::numeric_limits<uint32_t>::max)();
+}
+void VK::CreateBuffer(VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBufferUsageFlags BUF, const VkMemoryPropertyFlags MPF, const size_t Size, const void* Source) const
+{
+	constexpr std::array<uint32_t, 0> QFI = {};
+	const VkBufferCreateInfo BCI = {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.size = Size,
+		.usage = BUF,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		.queueFamilyIndexCount = static_cast<uint32_t>(std::size(QFI)), .pQueueFamilyIndices = std::data(QFI)
+	};
+	VERIFY_SUCCEEDED(vkCreateBuffer(Device, &BCI, nullptr, Buffer));
+
+	VkMemoryRequirements MR;
+	vkGetBufferMemoryRequirements(Device, *Buffer, &MR);
+	const VkMemoryAllocateInfo MAI = {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+		.pNext = nullptr,
+		.allocationSize = MR.size,
+		.memoryTypeIndex = GetMemoryTypeIndex(MR.memoryTypeBits, MPF)
+	};
+	VERIFY_SUCCEEDED(vkAllocateMemory(Device, &MAI, nullptr, DeviceMemory));
+	VERIFY_SUCCEEDED(vkBindBufferMemory(Device, *Buffer, *DeviceMemory, 0));
+
+	if (nullptr != Source) {
+		constexpr auto MapSize = VK_WHOLE_SIZE;
+		void* Data;
+		VERIFY_SUCCEEDED(vkMapMemory(Device, *DeviceMemory, 0, MapSize, static_cast<VkMemoryMapFlags>(0), &Data)); {
+			memcpy(Data, Source, Size);
+			//!< メモリコンテンツが変更されたことを明示的にドライバへ知らせる(vkMapMemory()した状態でやること)
+			if (!(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT & BUF)) {
+				const std::array MMRs = {
+					VkMappedMemoryRange({
+						.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+						.pNext = nullptr,
+						.memory = *DeviceMemory,
+						.offset = 0, .size = MapSize
+					}),
+				};
+				VERIFY_SUCCEEDED(vkFlushMappedMemoryRanges(Device, static_cast<uint32_t>(std::size(MMRs)), std::data(MMRs)));
+			}
+		} vkUnmapMemory(Device, *DeviceMemory);
+	}
+}
+
+void VK::CreateImage(VkImage* Image, VkDeviceMemory* DeviceMemory, const VkImageCreateInfo& ICI)
+{
+	VERIFY_SUCCEEDED(vkCreateImage(Device, &ICI, nullptr, Image));
+
+	VkMemoryRequirements MR;
+	vkGetImageMemoryRequirements(Device, *Image, &MR);
+	const VkMemoryAllocateInfo MAI = {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+		.pNext = nullptr,
+		.allocationSize = MR.size,
+		.memoryTypeIndex = GetMemoryTypeIndex(MR.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+	};
+	VERIFY_SUCCEEDED(vkAllocateMemory(Device, &MAI, nullptr, DeviceMemory));
+	VERIFY_SUCCEEDED(vkBindImageMemory(Device, *Image, *DeviceMemory, 0));
+}
+
+void VK::BufferMemoryBarrier(const VkCommandBuffer CB,
+	const VkBuffer Buffer,
+	const VkPipelineStageFlags SrcPSF, const VkPipelineStageFlags DstPSF,
+	const VkAccessFlags SrcAF, const VkAccessFlags DstAF) const
+{
+	constexpr std::array<VkMemoryBarrier2, 0> MBs = {};
+	const std::array BMBs = {
+		VkBufferMemoryBarrier2({
+			.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+			.pNext = nullptr,
+			.srcStageMask = SrcPSF, .srcAccessMask = SrcAF, .dstStageMask = DstPSF, .dstAccessMask = DstAF,
+			.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+			.buffer = Buffer, .offset = 0, .size = VK_WHOLE_SIZE
+		}),
+	};
+	constexpr std::array<VkImageMemoryBarrier2, 0> IMBs = {};
+	const VkDependencyInfo DI = {
+		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		.pNext = nullptr,
+		.dependencyFlags = 0,
+		.memoryBarrierCount = static_cast<uint32_t>(std::size(MBs)), .pMemoryBarriers = std::data(MBs),
+		.bufferMemoryBarrierCount = static_cast<uint32_t>(std::size(BMBs)), .pBufferMemoryBarriers = std::data(BMBs),
+		.imageMemoryBarrierCount = static_cast<uint32_t>(std::size(IMBs)), .pImageMemoryBarriers = std::data(IMBs),
+	};
+	vkCmdPipelineBarrier2(CB, &DI);
+}
+void VK::PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkBuffer Buffer, const size_t Size, const VkAccessFlags AF, const VkPipelineStageFlagBits PSF) const
+{
+	BufferMemoryBarrier(CB, Buffer,
+		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+		0, VK_ACCESS_MEMORY_WRITE_BIT);
+	{
+		const std::array BCs = { VkBufferCopy({.srcOffset = 0, .dstOffset = 0, .size = Size }), };
+		vkCmdCopyBuffer(CB, Staging, Buffer, static_cast<uint32_t>(std::size(BCs)), std::data(BCs));
+	}
+	BufferMemoryBarrier(CB, Buffer,
+		VK_PIPELINE_STAGE_TRANSFER_BIT, PSF,
+		VK_ACCESS_MEMORY_WRITE_BIT, AF);
+}
+
 void VK::CreateGeometry(const std::vector<VK::GeometryCreateInfo>& GCIs)
 {
 	struct GeometryCreateCommand {
@@ -913,7 +919,7 @@ void VK::CreateGeometry(const std::vector<VK::GeometryCreateInfo>& GCIs)
 	}
 }
 
-void VK::CreateTexture(const VkFormat Format, const uint32_t Width, const uint32_t Height) 
+void VK::CreateTexture(const VkFormat Format, const uint32_t Width, const uint32_t Height, const VkImageUsageFlags IUF, const VkImageAspectFlags IAF) 
 {
 	auto& Tex = Textures.emplace_back();
 	auto& Image = Tex.first.first;
@@ -931,7 +937,7 @@ void VK::CreateTexture(const VkFormat Format, const uint32_t Width, const uint32
 		.mipLevels = 1, .arrayLayers = 1,
 		.samples = VK_SAMPLE_COUNT_1_BIT,
 		.tiling = VK_IMAGE_TILING_OPTIMAL,
-		.usage = VK_IMAGE_USAGE_SAMPLED_BIT,
+		.usage = IUF,
 		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		.queueFamilyIndexCount = static_cast<uint32_t>(std::size(QFIs)), .pQueueFamilyIndices = std::data(QFIs),
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
@@ -950,7 +956,7 @@ void VK::CreateTexture(const VkFormat Format, const uint32_t Width, const uint32
 			.a = VK_COMPONENT_SWIZZLE_A
 		}),
 		.subresourceRange = VkImageSubresourceRange({
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.aspectMask = IAF,
 			.baseMipLevel = 0,
 			.levelCount = VK_REMAINING_MIP_LEVELS,
 			.baseArrayLayer = 0,

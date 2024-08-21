@@ -32,6 +32,7 @@
 class VK
 {
 public:
+	using SizeAndDataPtr = std::pair<const size_t, const void*>;
 	struct PhysDevProp
 	{
 		VkPhysicalDeviceProperties PDP;
@@ -45,18 +46,65 @@ public:
 
 	virtual ~VK();
 
-	virtual void CreateInstance(std::vector<const char*>& Extensions);
+	virtual void Init() {
+		CreateInstance();
+		SelectPhysicalDevice();
+		CreateSurface();
+		SelectSurfaceFormat();
+		CreateDevice();
+		CreateFence();
+		CreateSemaphore();
+		CreateSwapchain();
+		CreateCommandBuffer();
+		CreateGeometry();
+		CreateUniformBuffer();
+		CreateTexture();
+		CreatePipelineLayout();
+		CreateRenderPass();
+		CreatePipeline();
+		CreateFramebuffer();
+		CreateViewports();
+	}
+	virtual void Render() {
+		WaitFence();
+		AcquireNextImage();
+		OnUpdate();
+		Submit();
+		Present();
+	}
+
+	virtual void CreateInstance() {}
 	virtual void SelectPhysicalDevice();
 	virtual void CreateSurface() {}
 	virtual void SelectSurfaceFormat();
 	virtual void CreateDevice();
 	virtual void CreateFence();
 	virtual void CreateSemaphore();
-	virtual void CreateSwapchain(const uint32_t Width, const uint32_t Height);
+	virtual void CreateSwapchain() {}
 	virtual void CreateCommandBuffer();
+	virtual void CreateGeometry() {}
+	virtual void CreateUniformBuffer() {}
+	virtual void CreateTexture() {}
+	virtual void CreatePipelineLayout();
+	virtual void CreateRenderPass();
+	virtual void CreatePipeline() {}
+	virtual void CreateFramebuffer();
+	virtual void CreateDescriptor() {}
+	virtual void CreateViewports();
+
+	virtual void PopulateCommand();
+
+	virtual void WaitFence();
+	virtual void AcquireNextImage();
+	virtual void OnUpdate() {}
+	virtual void Submit();
+	virtual void Present();
+
+public:
+	void CreateInstance(const std::vector<const char*>& Extensions);
+	void CreateSwapchain(const uint32_t Width, const uint32_t Height);
 
 	uint32_t GetMemoryTypeIndex(const uint32_t TypeBits, const VkMemoryPropertyFlags MPF) const;
-
 	void CreateBuffer(VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBufferUsageFlags BUF, const VkMemoryPropertyFlags MPF, const size_t Size, const void* Source = nullptr) const;
 	void CreateBuffer(BufferAndDeviceMemory& BADM, const VkBufferUsageFlags BUF, const VkMemoryPropertyFlags MPF, const size_t Size, const void* Source = nullptr) const {
 		CreateBuffer(&BADM.first, &BADM.second, BUF, MPF, Size, Source);
@@ -84,27 +132,6 @@ public:
 		const VkAccessFlags SrcAF, const VkAccessFlags DstAF) const;
 	void PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkBuffer Buffer, const size_t Size, const VkAccessFlags AF, const VkPipelineStageFlagBits PSF) const;
 
-	virtual void CreateGeometry() {}
-	virtual void CreateUniformBuffer() {}
-	virtual void CreateTexture() {}
-	virtual void CreatePipelineLayout();
-	virtual void CreateRenderPass();
-	VkShaderModule CreateShaderModule(const std::filesystem::path& Path);
-	virtual void CreatePipeline() {}
-	virtual void CreateFramebuffer();
-	virtual void CreateDescriptor() {}
-	virtual void CreateViewports();
-
-	virtual void PopulateCommand();
-
-	virtual void WaitFence();
-	virtual void AcquireNextImage();
-	virtual void OnUpdate() {}
-	virtual void Submit();
-	virtual void Present();
-
-public:
-	using SizeAndDataPtr = std::pair<const size_t, const void*>;
 	struct GeometryCreateInfo {
 		std::vector<SizeAndDataPtr> Vtxs = {};
 		SizeAndDataPtr Idx = SIZE_DATA_NULL;
@@ -163,8 +190,16 @@ public:
 			});
 	}
 
-	void CreateTexture(const VkFormat Format, const uint32_t Width, const uint32_t Height);
+	void CreateTexture(const VkFormat Format, const uint32_t Width, const uint32_t Height, const VkImageUsageFlags IUF = VK_IMAGE_USAGE_SAMPLED_BIT, const VkImageAspectFlags IAF = VK_IMAGE_ASPECT_COLOR_BIT);
+	void CreateTexture_Depth(const VkFormat Format, const uint32_t Width, const uint32_t Height) {
+		CreateTexture(Format, Width, Height, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT);
+	}
+	void CreateTexture_Render(const VkFormat Format, const uint32_t Width, const uint32_t Height) {
+		CreateTexture(Format, Width, Height, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+	}
 	void CreateGLITexture(const std::filesystem::path& Path);
+
+	VkShaderModule CreateShaderModule(const std::filesystem::path& Path);
 
 	void CreatePipeline(VkPipeline& PL,
 		const std::vector<VkPipelineShaderStageCreateInfo>& PSSCIs,

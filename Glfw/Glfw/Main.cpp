@@ -37,8 +37,24 @@ private:
 public:
 	TriangleVK(GLFWwindow* Win) : GlfwWindow(Win) {}
 
+	virtual void CreateInstance() override {
+		std::vector<const char*> Exts;
+		//!< glfwGetRequiredInstanceExtensions がプラットフォーム毎の違いを吸収してくれる
+		uint32_t Count = 0;
+		const auto GlfwExts = glfwGetRequiredInstanceExtensions(&Count);
+		for (uint32_t i = 0; i < Count; ++i) {
+			std::cout << "Add Extension : " << GlfwExts[i] << std::endl;
+			Exts.emplace_back(GlfwExts[i]);
+		}
+		Super::CreateInstance(Exts);
+	}
 	virtual void CreateSurface() override {
 		VERIFY_SUCCEEDED(glfwCreateWindowSurface(Instance, GlfwWindow, nullptr, &Surface));
+	}
+	virtual void CreateSwapchain() override {
+		int FBWidth, FBHeight;
+		glfwGetFramebufferSize(GlfwWindow, &FBWidth, &FBHeight);
+		Super::CreateSwapchain(static_cast<const uint32_t>(FBWidth), static_cast<const uint32_t>(FBHeight));
 	}
 	virtual void CreateGeometry() override {
 		using PositonColor = std::pair<glm::vec3, glm::vec3>;
@@ -206,84 +222,15 @@ int main()
 	glfwSetKeyCallback(GlfwWin, GlfwKeyCallback);
 
 	TriangleVK TriVK(GlfwWin);
+	TriVK.Init();
 
-	//!< インスタンス (Instance)
-	{
-		//!< エクステンション (Extensions)
-		std::vector<const char*> Extensions;
-		uint32_t Count = 0;
-		//!< glfwGetRequiredInstanceExtensions がプラットフォーム毎の違いを吸収してくれる
-		const auto Exts = glfwGetRequiredInstanceExtensions(&Count);
-		for (uint32_t i = 0; i < Count; ++i) {
-			std::cout << "Add Extension : " << Exts[i] << std::endl;
-			Extensions.emplace_back(Exts[i]);
-		}
-		TriVK.CreateInstance(Extensions);
-	}
-
-	//!< 物理デバイス (Physical device) (GPU)
-	TriVK.SelectPhysicalDevice();
-
-	//!< サーフェス (Surface)
-	//!< glfwCreateWindowSurface がプラットフォーム毎の違いを吸収してくれる
-	TriVK.CreateSurface();
-	TriVK.SelectSurfaceFormat();
-
-	//!< デバイス、キュー (Device, Queue)
-	TriVK.CreateDevice();
-
-	//!< フェンスをシグナル状態で作成 (Fence, create as signaled) CPU - GPU
-	TriVK.CreateFence();
-
-	//!< セマフォ (Semaphore) GPU - GPU
-	TriVK.CreateSemaphore();
-
-	//!< スワップチェイン (Swapchain)
-	{
-		int FBWidth, FBHeight;
-		glfwGetFramebufferSize(GlfwWin, &FBWidth, &FBHeight);
-		TriVK.CreateSwapchain(static_cast<const uint32_t>(FBWidth), static_cast<const uint32_t>(FBHeight));
-	}
-
-	//!< コマンドバッファ (Command buffer)
-	TriVK.CreateCommandBuffer();
-
-	//!< ジオメトリ (Geometory)
-	TriVK.CreateGeometry();
-
-	//!< ユニフォームバッファ
-	TriVK.CreateUniformBuffer();
-
-	//!< テクスチャ
-	TriVK.CreateTexture();
-
-	//!< パイプラインレイアウト (Pipeline layout)
-	TriVK.CreatePipelineLayout();
-
-	//!< レンダーパス (Render pass)
-	TriVK.CreateRenderPass();
-
-	//!< パイプライン (Pipeline)
-	TriVK.CreatePipeline();
-
-	//!< フレームバッファ (Frame buffer)
-	TriVK.CreateFramebuffer();
-
-	//!< ビューポート、シザー (Viewport, scissor)
-	TriVK.CreateViewports();
-
-	//!< コマンド作成 (Populate command)
 	TriVK.PopulateCommand();
 
 	//!< ループ (Loop)
 	while (!glfwWindowShouldClose(GlfwWin)) {
 		glfwPollEvents();
 
-		TriVK.WaitFence();
-		TriVK.AcquireNextImage();
-		TriVK.OnUpdate();
-		TriVK.Submit();
-		TriVK.Present();
+		TriVK.Render();
 	}
 
 	//!< GLFW 後片付け (Terminate)
