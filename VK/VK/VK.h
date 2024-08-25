@@ -93,7 +93,12 @@ public:
 	virtual void CreateDescriptor() {}
 	virtual void CreateViewports();
 
-	virtual void PopulateCommand();
+	virtual void PopulateCommandBuffer() {
+		for (auto i = 0; i < std::size(Swapchain.ImageAndViews); ++i) {
+			PopulateSecondaryCommandBuffer(i);
+			PopulatePrimaryCommandBuffer(i);
+		}
+	}
 
 	virtual void WaitFence();
 	virtual void AcquireNextImage();
@@ -388,6 +393,9 @@ public:
 		};
 		return CreateDescriptorUpdateTemplate(DUT, DUTCI);
 	}
+
+	virtual void PopulateSecondaryCommandBuffer(const int i);
+	virtual void PopulatePrimaryCommandBuffer(const int i);
 
 	virtual void SubmitAndWait(const VkCommandBuffer CB);
 

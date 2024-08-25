@@ -413,36 +413,6 @@ void VK::CreateViewports()
 	ScissorRects.emplace_back(VkRect2D({ .offset = VkOffset2D({.x = 0, .y = 0 }), .extent = VkExtent2D({.width = Swapchain.Extent.width, .height = Swapchain.Extent.height }) }));
 }
 
-void VK::PopulateCommand()
-{
-	for (auto i = 0; i < std::size(Swapchain.ImageAndViews); ++i) {
-		const auto FB = Framebuffers[i];
-		const auto CB = PrimaryCommandBuffers[0].second[i];
-		constexpr VkCommandBufferBeginInfo CBBI = {
-			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			.pNext = nullptr,
-			.flags = 0,
-			.pInheritanceInfo = nullptr
-		};
-		VERIFY_SUCCEEDED(vkBeginCommandBuffer(CB, &CBBI)); {
-			vkCmdSetViewport(CB, 0, static_cast<uint32_t>(std::size(Viewports)), std::data(Viewports));
-			vkCmdSetScissor(CB, 0, static_cast<uint32_t>(std::size(ScissorRects)), std::data(ScissorRects));
-
-			constexpr std::array CVs = { VkClearValue({.color = { 0.529411793f, 0.807843208f, 0.921568692f, 1.0f } }) };
-			const VkRenderPassBeginInfo RPBI = {
-				.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-				.pNext = nullptr,
-				.renderPass = RenderPasses[0],
-				.framebuffer = FB,
-				.renderArea = VkRect2D({.offset = VkOffset2D({.x = 0, .y = 0 }), .extent = Swapchain.Extent }),
-				.clearValueCount = static_cast<uint32_t>(size(CVs)), .pClearValues = data(CVs)
-			};
-			vkCmdBeginRenderPass(CB, &RPBI, VK_SUBPASS_CONTENTS_INLINE); {
-			} vkCmdEndRenderPass(CB);
-		} VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
-	}
-}
-
 VK::CommandPoolAndBuffers& VK::CreateCommandPool(std::vector<VK::CommandPoolAndBuffers>& CPAB)
 {
 	const VkCommandPoolCreateInfo CPCI = {
@@ -1245,6 +1215,91 @@ void VK::CreatePipeline(VkPipeline& PL,
 	};
 
 	CreatePipeline(PL, PSSCIs, PVISCI, PIASCI, PTSCI, PVSCI, PRSCI, PMSCI, PDSSCI, PCBSCI, PDSCI, PLL, RP);
+}
+
+void VK::PopulateSecondaryCommandBuffer(const int i) 
+{
+#if 0
+	const auto RP = RenderPasses[0];
+	const auto CB = SecondaryCommandBuffers[0].second[i];
+
+	const VkCommandBufferInheritanceInfo CBII = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+		.pNext = nullptr,
+		.renderPass = RP,
+		.subpass = 0,
+		.framebuffer = VK_NULL_HANDLE,
+		.occlusionQueryEnable = VK_FALSE, .queryFlags = 0,
+		.pipelineStatistics = 0,
+	};
+	const VkCommandBufferBeginInfo CBBI = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		.pNext = nullptr,
+		.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
+		.pInheritanceInfo = &CBII
+	};
+	VERIFY_SUCCEEDED(vkBeginCommandBuffer(CB, &CBBI)); {
+		const auto PL = Pipelines[0];
+		const auto PLL = PipelineLayouts[0];
+		const auto DS = DescriptorSets[0];
+
+		const auto VB = VertexBuffers[0].first;
+		const auto IB = IndexBuffers[0].first;
+		const auto IDB = IndirectBuffers[0].first;
+
+		vkCmdSetViewport(CB, 0, static_cast<uint32_t>(std::size(Viewports)), std::data(Viewports));
+		vkCmdSetScissor(CB, 0, static_cast<uint32_t>(std::size(ScissorRects)), std::data(ScissorRects));
+
+		vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, PL);
+
+		const std::array DSs = { DS };
+		const std::array DynamicOffsets = { uint32_t(0) };
+		vkCmdBindDescriptorSets(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, PLL, 0, static_cast<uint32_t>(std::size(DSs)), std::data(DSs), static_cast<uint32_t>(std::size(DynamicOffsets)), std::data(DynamicOffsets));
+
+		const std::array VBs = { VB };
+		const std::array Offsets = { VkDeviceSize(0) };
+		vkCmdBindVertexBuffers(CB, 0, static_cast<uint32_t>(std::size(VBs)), std::data(VBs), std::data(Offsets));
+		vkCmdBindIndexBuffer(CB, IB, 0, VK_INDEX_TYPE_UINT32);
+		vkCmdDrawIndexedIndirect(CB, IDB, 0, 1, 0);
+
+	}VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
+#endif
+}
+void VK::PopulatePrimaryCommandBuffer(const int i) 
+{
+	const auto CB = PrimaryCommandBuffers[0].second[i];
+
+	constexpr VkCommandBufferBeginInfo CBBI = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.pInheritanceInfo = nullptr
+	};
+	VERIFY_SUCCEEDED(vkBeginCommandBuffer(CB, &CBBI)); {
+		//const auto PL = Pipelines[0];
+		const auto RP = RenderPasses[0];
+		const auto FB = Framebuffers[i];
+
+		//vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, PL);
+
+		vkCmdSetViewport(CB, 0, static_cast<uint32_t>(std::size(Viewports)), std::data(Viewports));
+		vkCmdSetScissor(CB, 0, static_cast<uint32_t>(std::size(ScissorRects)), std::data(ScissorRects));
+
+		constexpr std::array CVs = { VkClearValue({.color = { 0.529411793f, 0.807843208f, 0.921568692f, 1.0f } }) };
+		const VkRenderPassBeginInfo RPBI = {
+			.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+			.pNext = nullptr,
+			.renderPass = RP,
+			.framebuffer = FB,
+			.renderArea = VkRect2D({.offset = VkOffset2D({.x = 0, .y = 0 }), .extent = Swapchain.Extent }),
+			.clearValueCount = static_cast<uint32_t>(size(CVs)), .pClearValues = data(CVs)
+		};
+		vkCmdBeginRenderPass(CB, &RPBI, VK_SUBPASS_CONTENTS_INLINE); {
+			//const auto SCB = SecondaryCommandBuffers[0].second[i];
+			//const std::array SCBs = { SCB };
+			//vkCmdExecuteCommands(CB, static_cast<uint32_t>(std::size(SCBs)), std::data(SCBs));
+		} vkCmdEndRenderPass(CB);
+	} VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
 }
 
 void VK::SubmitAndWait(const VkCommandBuffer CB)
