@@ -58,8 +58,11 @@ VK::~VK()
 		vkFreeMemory(Device, i.second, nullptr);
 		vkDestroyBuffer(Device, i.first, nullptr);
 	}
-	if (VK_NULL_HANDLE != CommandPool) {
-		vkDestroyCommandPool(Device, CommandPool, nullptr);
+	for (auto& i : SecondaryCommandBuffers) {
+		vkDestroyCommandPool(Device, i.first, nullptr);
+	}
+	for (auto& i : PrimaryCommandBuffers) {
+		vkDestroyCommandPool(Device, i.first, nullptr);
 	}
 	for (auto i : Swapchain.ImageAndViews) {
 		vkDestroyImageView(Device, i.second, nullptr);
@@ -341,23 +344,7 @@ void VK::CreateSemaphore()
 
 void VK::CreateCommandBuffer()
 {
-	const VkCommandPoolCreateInfo CPCI = {
-		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-		.pNext = nullptr,
-		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-		.queueFamilyIndex = GraphicsQueue.second
-	};
-	VERIFY_SUCCEEDED(vkCreateCommandPool(Device, &CPCI, nullptr, &CommandPool));
-
-	CommandBuffers.resize(std::size(Swapchain.ImageAndViews));
-	const VkCommandBufferAllocateInfo CBAI = {
-		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-		.pNext = nullptr,
-		.commandPool = CommandPool,
-		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-		.commandBufferCount = static_cast<uint32_t>(std::size(CommandBuffers))
-	};
-	VERIFY_SUCCEEDED(vkAllocateCommandBuffers(Device, &CBAI, std::data(CommandBuffers)));
+	AllocateCommandBuffers(CreateCommandPool(PrimaryCommandBuffers), std::size(Swapchain.ImageAndViews), VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 }
 
 void VK::CreatePipelineLayout()
@@ -372,44 +359,6 @@ void VK::CreatePipelineLayout()
 		.pushConstantRangeCount = static_cast<uint32_t>(std::size(PCRs)), .pPushConstantRanges = std::data(PCRs)
 	};
 	VERIFY_SUCCEEDED(vkCreatePipelineLayout(Device, &PLCI, nullptr, &PipelineLayouts.emplace_back()));
-}
-
-void VK::CreateRenderPass()
-{
-	const std::array ADs = {
-	VkAttachmentDescription({
-		.flags = 0,
-		.format = SelectedSurfaceFormat.format,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR, .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE, .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED, .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-	}),
-	};
-	constexpr std::array<VkAttachmentReference, 0> IAs = {};
-	constexpr std::array CAs = { VkAttachmentReference({.attachment = 0, .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }), };
-	constexpr std::array RAs = { VkAttachmentReference({.attachment = VK_ATTACHMENT_UNUSED, .layout = VK_IMAGE_LAYOUT_UNDEFINED }), };
-	constexpr std::array<uint32_t, 0> PAs = {};
-	const std::array SDs = {
-		VkSubpassDescription({
-			.flags = 0,
-			.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-			.inputAttachmentCount = static_cast<uint32_t>(std::size(IAs)), .pInputAttachments = std::data(IAs),
-			.colorAttachmentCount = static_cast<uint32_t>(std::size(CAs)), .pColorAttachments = std::data(CAs), .pResolveAttachments = std::data(RAs),
-			.pDepthStencilAttachment = nullptr,
-			.preserveAttachmentCount = static_cast<uint32_t>(std::size(PAs)), .pPreserveAttachments = std::data(PAs)
-		}),
-	};
-	const std::array<VkSubpassDependency, 0> Deps;
-	const VkRenderPassCreateInfo RPCI = {
-		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-		.pNext = nullptr,
-		.flags = 0,
-		.attachmentCount = static_cast<uint32_t>(std::size(ADs)), .pAttachments = std::data(ADs),
-		.subpassCount = static_cast<uint32_t>(std::size(SDs)), .pSubpasses = std::data(SDs),
-		.dependencyCount = static_cast<uint32_t>(std::size(Deps)), .pDependencies = std::data(Deps)
-	};
-	VERIFY_SUCCEEDED(vkCreateRenderPass(Device, &RPCI, nullptr, &RenderPasses.emplace_back()));
 }
 
 VkShaderModule VK::CreateShaderModule(const std::filesystem::path& Path)
@@ -468,7 +417,7 @@ void VK::PopulateCommand()
 {
 	for (auto i = 0; i < std::size(Swapchain.ImageAndViews); ++i) {
 		const auto FB = Framebuffers[i];
-		const auto CB = CommandBuffers[i];
+		const auto CB = PrimaryCommandBuffers[0].second[i];
 		constexpr VkCommandBufferBeginInfo CBBI = {
 			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 			.pNext = nullptr,
@@ -494,6 +443,28 @@ void VK::PopulateCommand()
 	}
 }
 
+VK::CommandPoolAndBuffers& VK::CreateCommandPool(std::vector<VK::CommandPoolAndBuffers>& CPAB)
+{
+	const VkCommandPoolCreateInfo CPCI = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+		.queueFamilyIndex = GraphicsQueue.second
+	};
+	return CreateCommandPool(CPAB, CPCI);
+}
+void VK::AllocateCommandBuffers(const size_t Count, VkCommandBuffer* CB, const VkCommandPool CP, const VkCommandBufferLevel CBL) 
+{
+	const VkCommandBufferAllocateInfo CBAI = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		.pNext = nullptr,
+		.commandPool = CP,
+		.level = CBL,
+		.commandBufferCount = static_cast<const uint32_t>(Count)
+	};
+	AllocateCommandBuffers(CB, CBAI);
+}
+
 void VK::WaitFence()
 {
 	const std::array Fences = { Fence };
@@ -509,7 +480,7 @@ void VK::AcquireNextImage()
 
 void VK::Submit()
 {
-	const auto& CB = CommandBuffers[Swapchain.Index];
+	const auto& CB = PrimaryCommandBuffers[0].second[Swapchain.Index];
 	//!< セマフォ (A) がシグナル (次のイメージ取得) される迄待つ
 	//!< レンダリングが終わったらセマフォ (B) がシグナル (レンダリング完了) される
 	const std::array WaitSSIs = {
@@ -880,7 +851,7 @@ void VK::CreateGeometry(const std::vector<VK::GeometryCreateInfo>& GCIs)
 		}
 	}
 
-	const auto& CB = CommandBuffers[0];
+	const auto& CB = PrimaryCommandBuffers[0].second[0];
 	constexpr VkCommandBufferBeginInfo CBBI = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 		.pNext = nullptr,
@@ -1016,6 +987,89 @@ void VK::CreateGLITexture(const std::filesystem::path& Path)
 		})
 	};
 	CreateImageAndView(&Image, &DeviceMemory, &ImageView, ICI, IVCI);
+}
+
+void VK::CreateRenderPass(const std::vector<VkAttachmentDescription>& ADs, const std::vector<VkSubpassDescription>& SDs)
+{
+	const std::array<VkSubpassDependency, 0> Deps;
+	const VkRenderPassCreateInfo RPCI = {
+		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.attachmentCount = static_cast<uint32_t>(std::size(ADs)), .pAttachments = std::data(ADs),
+		.subpassCount = static_cast<uint32_t>(std::size(SDs)), .pSubpasses = std::data(SDs),
+		.dependencyCount = static_cast<uint32_t>(std::size(Deps)), .pDependencies = std::data(Deps)
+	};
+	CreateRenderPass(RPCI);
+}
+void VK::CreateRenderPass(const VkAttachmentLoadOp ALO, const VkAttachmentStoreOp ASO)
+{
+	const std::vector ADs = {
+		VkAttachmentDescription({
+			.flags = 0,
+			.format = SelectedSurfaceFormat.format,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.loadOp = ALO, .storeOp = ASO,
+			.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE, .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+			.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED, .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+		}),
+	};
+
+	constexpr std::array<VkAttachmentReference, 0> IAs = {};
+	constexpr std::array CAs = { VkAttachmentReference({.attachment = 0, .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }), };
+	constexpr std::array RAs = { VkAttachmentReference({.attachment = VK_ATTACHMENT_UNUSED, .layout = VK_IMAGE_LAYOUT_UNDEFINED }), };
+	constexpr std::array<uint32_t, 0> PAs = {};
+	const std::vector SDs = {
+		VkSubpassDescription({
+			.flags = 0,
+			.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+			.inputAttachmentCount = static_cast<uint32_t>(std::size(IAs)), .pInputAttachments = std::data(IAs),
+			.colorAttachmentCount = static_cast<uint32_t>(std::size(CAs)), .pColorAttachments = std::data(CAs),
+			.pResolveAttachments = std::data(RAs),
+			.pDepthStencilAttachment = nullptr,
+			.preserveAttachmentCount = static_cast<uint32_t>(std::size(PAs)), .pPreserveAttachments = std::data(PAs)
+		}),
+	};
+	CreateRenderPass(ADs, SDs);
+}
+void VK::CreateRenderPass_Depth() 
+{
+	const std::vector ADs = {
+		VkAttachmentDescription({
+			.flags = 0,
+			.format = SelectedSurfaceFormat.format,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR, .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+			.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE, .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+			.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED, .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+		}),
+		VkAttachmentDescription({
+			.flags = 0,
+			.format = VK_FORMAT_D24_UNORM_S8_UINT,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR, .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+			.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE, .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+			.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED, .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+		}),
+	};
+
+	constexpr std::array<VkAttachmentReference, 0> IAs = {};
+	constexpr std::array CAs = { VkAttachmentReference({.attachment = 0, .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }), };
+	constexpr std::array RAs = { VkAttachmentReference({.attachment = VK_ATTACHMENT_UNUSED, .layout = VK_IMAGE_LAYOUT_UNDEFINED }), };
+	constexpr auto DA = VkAttachmentReference({ .attachment = 1, .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL });
+	constexpr std::array<uint32_t, 0> PAs = {};
+	const std::vector SDs = {
+		VkSubpassDescription({
+			.flags = 0,
+			.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+			.inputAttachmentCount = static_cast<uint32_t>(std::size(IAs)), .pInputAttachments = std::data(IAs),
+			.colorAttachmentCount = static_cast<uint32_t>(std::size(CAs)), .pColorAttachments = std::data(CAs), 
+			.pResolveAttachments = std::data(RAs),
+			.pDepthStencilAttachment = &DA,
+			.preserveAttachmentCount = static_cast<uint32_t>(std::size(PAs)), .pPreserveAttachments = std::data(PAs)
+		}),
+	};
+	CreateRenderPass(ADs, SDs);
 }
 
 void VK::CreatePipeline(VkPipeline& PL,

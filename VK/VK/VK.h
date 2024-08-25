@@ -43,6 +43,7 @@ public:
 	using BufferAndDeviceMemory = std::pair<VkBuffer, VkDeviceMemory>;
 	using ImageAndView = std::pair<VkImage, VkImageView>;
 	using ImageAndDeviceMemory = std::pair<ImageAndView, VkDeviceMemory>;
+	using CommandPoolAndBuffers = std::pair<VkCommandPool, std::vector<VkCommandBuffer>>;
 
 	virtual ~VK();
 
@@ -86,7 +87,7 @@ public:
 	virtual void CreateUniformBuffer() {}
 	virtual void CreateTexture() {}
 	virtual void CreatePipelineLayout();
-	virtual void CreateRenderPass();
+	virtual void CreateRenderPass() { CreateRenderPass_Clear(); }
 	virtual void CreatePipeline() {}
 	virtual void CreateFramebuffer();
 	virtual void CreateDescriptor() {}
@@ -131,6 +132,20 @@ public:
 		const VkPipelineStageFlags SrcPSF, const VkPipelineStageFlags DstPSF,
 		const VkAccessFlags SrcAF, const VkAccessFlags DstAF) const;
 	void PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkBuffer Buffer, const size_t Size, const VkAccessFlags AF, const VkPipelineStageFlagBits PSF) const;
+
+	CommandPoolAndBuffers& CreateCommandPool(std::vector<CommandPoolAndBuffers>& CPABs, const VkCommandPoolCreateInfo& CPCI) {
+		auto& CPAB = CPABs.emplace_back();
+		VERIFY_SUCCEEDED(vkCreateCommandPool(Device, &CPCI, nullptr, &CPAB.first)); 
+		return CPAB;
+	}
+	CommandPoolAndBuffers& CreateCommandPool(std::vector<CommandPoolAndBuffers>& CPAB);
+
+	void AllocateCommandBuffers(VkCommandBuffer* CB, const VkCommandBufferAllocateInfo& CBAI) { VERIFY_SUCCEEDED(vkAllocateCommandBuffers(Device, &CBAI, CB)); }
+	void AllocateCommandBuffers(const size_t Count, VkCommandBuffer* CB, const VkCommandPool CP, const VkCommandBufferLevel CBL);
+	void AllocateCommandBuffers(CommandPoolAndBuffers& CPAB, const size_t Count, const VkCommandBufferLevel CBL) {
+		CPAB.second.resize(Count);
+		AllocateCommandBuffers(std::size(CPAB.second), std::data(CPAB.second), CPAB.first, CBL);
+	}
 
 	struct GeometryCreateInfo {
 		std::vector<SizeAndDataPtr> Vtxs = {};
@@ -200,6 +215,13 @@ public:
 	void CreateGLITexture(const std::filesystem::path& Path);
 
 	VkShaderModule CreateShaderModule(const std::filesystem::path& Path);
+
+	void CreateRenderPass(const VkRenderPassCreateInfo& RPCI) { VERIFY_SUCCEEDED(vkCreateRenderPass(Device, &RPCI, nullptr, &RenderPasses.emplace_back())); }
+	void CreateRenderPass(const std::vector<VkAttachmentDescription>& ADs, const std::vector<VkSubpassDescription>& SDs);
+	void CreateRenderPass(const VkAttachmentLoadOp ALO, const VkAttachmentStoreOp ASO);
+	void CreateRenderPass_None() { CreateRenderPass(VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_STORE); }
+	void CreateRenderPass_Clear() { CreateRenderPass(VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE); }
+	void CreateRenderPass_Depth();
 
 	void CreatePipeline(VkPipeline& PL,
 		const std::vector<VkPipelineShaderStageCreateInfo>& PSSCIs,
@@ -401,8 +423,8 @@ protected:
 	};
 	Swapchain Swapchain;
 
-	VkCommandPool CommandPool = VK_NULL_HANDLE;
-	std::vector<VkCommandBuffer> CommandBuffers;
+	std::vector<CommandPoolAndBuffers> PrimaryCommandBuffers;
+	std::vector<CommandPoolAndBuffers> SecondaryCommandBuffers; //!< VK ではプールをセカンダリ用に分ける必要は無いが、DX に合わせて別にしている
 
 	std::vector<BufferAndDeviceMemory> VertexBuffers;
 	std::vector<BufferAndDeviceMemory> IndexBuffers;

@@ -110,7 +110,7 @@ public:
 	virtual void PopulateCommand() override { 
 		for (auto i = 0; i < std::size(Swapchain.ImageAndViews); ++i) {
 			const auto FB = Framebuffers[i];
-			const auto CB = CommandBuffers[i];
+			const auto CB = PrimaryCommandBuffers[0].second[i];
 			constexpr VkCommandBufferBeginInfo CBBI = {
 				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 				.pNext = nullptr,
