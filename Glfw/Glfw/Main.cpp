@@ -17,6 +17,7 @@
 //#define USE_FULLSCREEN
 
 #define USE_INDEX
+#define USE_SECONDARY_CB
 
 //!< コールバック (Callbacks)
 static void GlfwErrorCallback(int Code, const char* Description)
@@ -71,8 +72,7 @@ public:
 			SIZE_DATA(Indices),
 			std::size(Indices), 1);
 #else
-		VK::CreateGeometry(SIZE_DATA(Vertices)),
-			std::size(Vertices), 1);
+		VK::CreateGeometry(SIZE_DATA(Vertices), std::size(Vertices), 1);
 #endif
 	}
 	virtual void CreatePipeline() override {
@@ -107,6 +107,50 @@ public:
 			vkDestroyShaderModule(Device, i, nullptr);
 		}
 	}
+#ifdef USE_SECONDARY_CB
+	virtual void PopulateSecondaryCommandBuffer(const int i) override {
+		const auto RP = RenderPasses[0];
+		const auto CB = SecondaryCommandBuffers[0].second[i];
+
+		const VkCommandBufferInheritanceInfo CBII = {
+			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+			.pNext = nullptr,
+			.renderPass = RP,
+			.subpass = 0,
+			.framebuffer = VK_NULL_HANDLE,
+			.occlusionQueryEnable = VK_FALSE, .queryFlags = 0,
+			.pipelineStatistics = 0,
+		};
+		const VkCommandBufferBeginInfo CBBI = {
+			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+			.pNext = nullptr,
+			.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
+			.pInheritanceInfo = &CBII
+		};
+		VERIFY_SUCCEEDED(vkBeginCommandBuffer(CB, &CBBI)); {
+			const auto PL = Pipelines[0];
+
+			const auto VB = VertexBuffers[0].first;
+			const auto IDB = IndirectBuffers[0].first;
+
+			vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, PL);
+
+			vkCmdSetViewport(CB, 0, static_cast<uint32_t>(std::size(Viewports)), std::data(Viewports));
+			vkCmdSetScissor(CB, 0, static_cast<uint32_t>(std::size(ScissorRects)), std::data(ScissorRects));
+
+			const std::array VBs = { VB };
+			const std::array Offsets = { VkDeviceSize(0) };
+			vkCmdBindVertexBuffers(CB, 0, static_cast<uint32_t>(std::size(VBs)), std::data(VBs), std::data(Offsets));
+#ifdef USE_INDEX
+			const auto IB = IndexBuffers[0].first;
+			vkCmdBindIndexBuffer(CB, IB, 0, VK_INDEX_TYPE_UINT32);
+			vkCmdDrawIndexedIndirect(CB, IDB, 0, 1, 0);
+#else
+			vkCmdDrawIndirect(CB, IDB, 0, 1, 0);
+#endif
+		}VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
+	}
+#endif
 	virtual void PopulatePrimaryCommandBuffer(const int i) override {
 		const auto CB = PrimaryCommandBuffers[0].second[i];
 
@@ -117,14 +161,8 @@ public:
 			.pInheritanceInfo = nullptr
 		};
 		VERIFY_SUCCEEDED(vkBeginCommandBuffer(CB, &CBBI)); {
-			const auto PL = Pipelines[0];
 			const auto RP = RenderPasses[0];
 			const auto FB = Framebuffers[i];
-
-			vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, PL);
-
-			vkCmdSetViewport(CB, 0, static_cast<uint32_t>(std::size(Viewports)), std::data(Viewports));
-			vkCmdSetScissor(CB, 0, static_cast<uint32_t>(std::size(ScissorRects)), std::data(ScissorRects));
 
 			constexpr std::array CVs = { VkClearValue({.color = { 0.529411793f, 0.807843208f, 0.921568692f, 1.0f } }) };
 			const VkRenderPassBeginInfo RPBI = {
@@ -135,21 +173,36 @@ public:
 				.renderArea = VkRect2D({.offset = VkOffset2D({.x = 0, .y = 0 }), .extent = Swapchain.Extent }),
 				.clearValueCount = static_cast<uint32_t>(size(CVs)), .pClearValues = data(CVs)
 			};
+#ifdef USE_SECONDARY_CB
+			vkCmdBeginRenderPass(CB, &RPBI, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS); {
+				const auto SCB = SecondaryCommandBuffers[0].second[i];
+				const std::array SCBs = { SCB };
+				vkCmdExecuteCommands(CB, static_cast<uint32_t>(std::size(SCBs)), std::data(SCBs));
+			} vkCmdEndRenderPass(CB);
+#else
 			vkCmdBeginRenderPass(CB, &RPBI, VK_SUBPASS_CONTENTS_INLINE); {
+				const auto PL = Pipelines[0];
+
+				vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, PL);
+
+				vkCmdSetViewport(CB, 0, static_cast<uint32_t>(std::size(Viewports)), std::data(Viewports));
+				vkCmdSetScissor(CB, 0, static_cast<uint32_t>(std::size(ScissorRects)), std::data(ScissorRects));
+
 				const auto VB = VertexBuffers[0].first;
-				const auto IB = IndexBuffers[0].first;
 				const auto IDB = IndirectBuffers[0].first;
 
 				const std::array VBs = { VB };
 				const std::array Offsets = { VkDeviceSize(0) };
 				vkCmdBindVertexBuffers(CB, 0, static_cast<uint32_t>(std::size(VBs)), std::data(VBs), std::data(Offsets));
 #ifdef USE_INDEX
+				const auto IB = IndexBuffers[0].first;
 				vkCmdBindIndexBuffer(CB, IB, 0, VK_INDEX_TYPE_UINT32);
 				vkCmdDrawIndexedIndirect(CB, IDB, 0, 1, 0);
 #else
 				vkCmdDrawIndirect(CB, IDB, 0, 1, 0);
 #endif
 			} vkCmdEndRenderPass(CB);
+#endif
 		} VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
 	}
 

@@ -345,6 +345,7 @@ void VK::CreateSemaphore()
 void VK::CreateCommandBuffer()
 {
 	AllocateCommandBuffers(CreateCommandPool(PrimaryCommandBuffers), std::size(Swapchain.ImageAndViews), VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+	AllocateCommandBuffers(CreateCommandPool(SecondaryCommandBuffers), std::size(Swapchain.ImageAndViews), VK_COMMAND_BUFFER_LEVEL_SECONDARY);
 }
 
 void VK::CreatePipelineLayout()
@@ -1240,6 +1241,7 @@ void VK::PopulateSecondaryCommandBuffer(const int i)
 	};
 	VERIFY_SUCCEEDED(vkBeginCommandBuffer(CB, &CBBI)); {
 		const auto PL = Pipelines[0];
+
 		const auto PLL = PipelineLayouts[0];
 		const auto DS = DescriptorSets[0];
 
@@ -1247,10 +1249,10 @@ void VK::PopulateSecondaryCommandBuffer(const int i)
 		const auto IB = IndexBuffers[0].first;
 		const auto IDB = IndirectBuffers[0].first;
 
+		vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, PL);
+
 		vkCmdSetViewport(CB, 0, static_cast<uint32_t>(std::size(Viewports)), std::data(Viewports));
 		vkCmdSetScissor(CB, 0, static_cast<uint32_t>(std::size(ScissorRects)), std::data(ScissorRects));
-
-		vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, PL);
 
 		const std::array DSs = { DS };
 		const std::array DynamicOffsets = { uint32_t(0) };
@@ -1276,14 +1278,8 @@ void VK::PopulatePrimaryCommandBuffer(const int i)
 		.pInheritanceInfo = nullptr
 	};
 	VERIFY_SUCCEEDED(vkBeginCommandBuffer(CB, &CBBI)); {
-		//const auto PL = Pipelines[0];
 		const auto RP = RenderPasses[0];
 		const auto FB = Framebuffers[i];
-
-		//vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, PL);
-
-		vkCmdSetViewport(CB, 0, static_cast<uint32_t>(std::size(Viewports)), std::data(Viewports));
-		vkCmdSetScissor(CB, 0, static_cast<uint32_t>(std::size(ScissorRects)), std::data(ScissorRects));
 
 		constexpr std::array CVs = { VkClearValue({.color = { 0.529411793f, 0.807843208f, 0.921568692f, 1.0f } }) };
 		const VkRenderPassBeginInfo RPBI = {
@@ -1294,11 +1290,22 @@ void VK::PopulatePrimaryCommandBuffer(const int i)
 			.renderArea = VkRect2D({.offset = VkOffset2D({.x = 0, .y = 0 }), .extent = Swapchain.Extent }),
 			.clearValueCount = static_cast<uint32_t>(size(CVs)), .pClearValues = data(CVs)
 		};
+#if 1
 		vkCmdBeginRenderPass(CB, &RPBI, VK_SUBPASS_CONTENTS_INLINE); {
-			//const auto SCB = SecondaryCommandBuffers[0].second[i];
-			//const std::array SCBs = { SCB };
-			//vkCmdExecuteCommands(CB, static_cast<uint32_t>(std::size(SCBs)), std::data(SCBs));
+			//const auto PL = Pipelines[0];
+			
+			//vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, PL);
+
+			vkCmdSetViewport(CB, 0, static_cast<uint32_t>(std::size(Viewports)), std::data(Viewports));
+			vkCmdSetScissor(CB, 0, static_cast<uint32_t>(std::size(ScissorRects)), std::data(ScissorRects));
 		} vkCmdEndRenderPass(CB);
+#else
+		vkCmdBeginRenderPass(CB, &RPBI, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS); {
+			const auto SCB = SecondaryCommandBuffers[0].second[i];
+			const std::array SCBs = { SCB };
+			vkCmdExecuteCommands(CB, static_cast<uint32_t>(std::size(SCBs)), std::data(SCBs));
+		} vkCmdEndRenderPass(CB);
+#endif	
 	} VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
 }
 
