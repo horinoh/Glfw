@@ -6,6 +6,7 @@
 #include <numeric>
 #include <filesystem>
 #include <numbers>
+#include <span>
 #include <thread>
 
 #include <Vulkan/vulkan.h>
@@ -40,12 +41,16 @@ public:
 	};
 	using PhysicalDeviceAndProps = std::pair<VkPhysicalDevice, PhysDevProp>;
 	using QueueAndFamilyIndex = std::pair<VkQueue, uint32_t>;
-	using BufferAndDeviceMemory = std::pair<VkBuffer, VkDeviceMemory>;
+	using BufferAndDeviceMemory = std::pair<VkBuffer, VkDeviceMemory>; // add VkMemoryRequirements;
 	using ImageAndView = std::pair<VkImage, VkImageView>;
 	using ImageAndDeviceMemory = std::pair<ImageAndView, VkDeviceMemory>;
 	using CommandPoolAndBuffers = std::pair<VkCommandPool, std::vector<VkCommandBuffer>>;
 
 	virtual ~VK();
+
+	static constexpr size_t RoundUpMask(const size_t Size, const size_t Mask) { return (Size + Mask) & ~Mask; }
+	static constexpr size_t RoundUp(const size_t Size, const size_t Align) { return RoundUpMask(Size, Align - 1); }
+	static constexpr size_t RoundUp256(const size_t Size) { return RoundUpMask(Size, 0xff); }
 
 	virtual void Init() {
 		CreateInstance();
@@ -89,7 +94,10 @@ public:
 	virtual void CreatePipelineLayout();
 	virtual void CreateRenderPass() { CreateRenderPass_Clear(); }
 	virtual void CreatePipeline() {}
-	virtual void CreateFramebuffer();
+	virtual void CreateFramebuffer() {
+		Framebuffers.reserve(std::size(Swapchain.ImageAndViews));
+		CreateFramebuffer(RenderPasses[0]);
+	}
 	virtual void CreateDescriptor() {}
 	virtual void CreateViewports();
 
@@ -134,8 +142,13 @@ public:
 
 	void BufferMemoryBarrier(const VkCommandBuffer CB,
 		const VkBuffer Buffer,
-		const VkPipelineStageFlags SrcPSF, const VkPipelineStageFlags DstPSF,
-		const VkAccessFlags SrcAF, const VkAccessFlags DstAF) const;
+		const VkPipelineStageFlags2 SrcPSF, const VkPipelineStageFlags2 DstPSF,
+		const VkAccessFlags2 SrcAF, const VkAccessFlags2 DstAF) const;
+	void ImageMemoryBarrier(const VkCommandBuffer CB,
+		const VkImage Image,
+		const VkPipelineStageFlags2 SrcPSF, const VkPipelineStageFlags2 DstPSF,
+		const VkAccessFlags2 SrcAF, const VkAccessFlags2 DstAF,
+		const VkImageLayout OldIL, const VkImageLayout NewIL) const;
 	void PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkBuffer Buffer, const size_t Size, const VkAccessFlags AF, const VkPipelineStageFlagBits PSF) const;
 
 	CommandPoolAndBuffers& CreateCommandPool(std::vector<CommandPoolAndBuffers>& CPABs, const VkCommandPoolCreateInfo& CPCI) {
@@ -298,6 +311,7 @@ public:
 			PLL,
 			RP);
 	}
+	void CreateFramebuffer(const VkRenderPass RP);
 
 	void CreateSampler(const VkSamplerCreateInfo& SCI) { VERIFY_SUCCEEDED(vkCreateSampler(Device, &SCI, nullptr, &Samplers.emplace_back())); }
 	void CreateSampler(const VkFilter Filter, const VkSamplerMipmapMode SMM, const VkSamplerAddressMode SAM) {
@@ -458,5 +472,3 @@ protected:
 	std::vector<VkViewport> Viewports;
 	std::vector<VkRect2D> ScissorRects;
 };
-
-//#include "LKGVK.h"

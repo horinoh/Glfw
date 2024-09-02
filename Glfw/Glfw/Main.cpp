@@ -31,32 +31,43 @@ static void GlfwKeyCallback(GLFWwindow* Window, int Key, [[maybe_unused]] int Sc
 	}
 }
 
-class TriangleVK : public VK
+class Glfw 
+{
+public:
+	Glfw(GLFWwindow* Win) : GlfwWindow(Win) {
+		uint32_t Count = 0;
+		//!< glfwGetRequiredInstanceExtensions がプラットフォーム毎の違いを吸収してくれる
+		const auto GlfwExts = glfwGetRequiredInstanceExtensions(&Count);
+		for (uint32_t i = 0; i < Count; ++i) {
+			std::cout << "Add Extension : " << GlfwExts[i] << std::endl;
+			InstanceExtensions.emplace_back(GlfwExts[i]);
+		}
+
+		glfwGetFramebufferSize(GlfwWindow, &FBWidth, &FBHeight);
+	}
+protected:
+	std::vector<const char*> InstanceExtensions;
+	int FBWidth, FBHeight;
+	GLFWwindow* GlfwWindow = nullptr;
+};
+
+class TriangleGlfwVK : public VK, public Glfw
 {
 private:
 	using Super = VK;
 public:
-	TriangleVK(GLFWwindow* Win) : GlfwWindow(Win) {}
+	TriangleGlfwVK(GLFWwindow* Win) : Glfw(Win) {}
 
 	virtual void CreateInstance() override {
-		std::vector<const char*> Exts;
-		//!< glfwGetRequiredInstanceExtensions がプラットフォーム毎の違いを吸収してくれる
-		uint32_t Count = 0;
-		const auto GlfwExts = glfwGetRequiredInstanceExtensions(&Count);
-		for (uint32_t i = 0; i < Count; ++i) {
-			std::cout << "Add Extension : " << GlfwExts[i] << std::endl;
-			Exts.emplace_back(GlfwExts[i]);
-		}
-		Super::CreateInstance(Exts);
+		Super::CreateInstance(InstanceExtensions);
 	}
 	virtual void CreateSurface() override {
 		VERIFY_SUCCEEDED(glfwCreateWindowSurface(Instance, GlfwWindow, nullptr, &Surface));
 	}
 	virtual void CreateSwapchain() override {
-		int FBWidth, FBHeight;
-		glfwGetFramebufferSize(GlfwWindow, &FBWidth, &FBHeight);
 		Super::CreateSwapchain(static_cast<const uint32_t>(FBWidth), static_cast<const uint32_t>(FBHeight));
 	}
+
 	virtual void CreateGeometry() override {
 		using PositonColor = std::pair<glm::vec3, glm::vec3>;
 		const std::array Vertices = {
@@ -205,9 +216,6 @@ public:
 #endif
 		} VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
 	}
-
-protected:
-	GLFWwindow* GlfwWindow = nullptr;
 };
 
 int main()
@@ -280,16 +288,16 @@ int main()
 	glfwSetErrorCallback(GlfwErrorCallback);
 	glfwSetKeyCallback(GlfwWin, GlfwKeyCallback);
 
-	TriangleVK TriVK(GlfwWin);
-	TriVK.Init();
+	TriangleGlfwVK Vk(GlfwWin);
+	Vk.Init();
 
-	TriVK.PopulateCommandBuffer();
+	Vk.PopulateCommandBuffer();
 
 	//!< ループ (Loop)
 	while (!glfwWindowShouldClose(GlfwWin)) {
 		glfwPollEvents();
 
-		TriVK.Render();
+		Vk.Render();
 	}
 
 	//!< GLFW 後片付け (Terminate)

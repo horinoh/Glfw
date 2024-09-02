@@ -386,24 +386,6 @@ VkShaderModule VK::CreateShaderModule(const std::filesystem::path& Path)
 	return SM;
 };
 
-void VK::CreateFramebuffer()
-{
-	Framebuffers.reserve(std::size(Swapchain.ImageAndViews));
-	for (const auto& i : Swapchain.ImageAndViews) {
-		const std::array IVs = { i.second };
-		const VkFramebufferCreateInfo FCI = {
-			.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-			.pNext = nullptr,
-			.flags = 0,
-			.renderPass = RenderPasses[0],
-			.attachmentCount = static_cast<uint32_t>(std::size(IVs)), .pAttachments = std::data(IVs),
-			.width = Swapchain.Extent.width, .height = Swapchain.Extent.height,
-			.layers = 1
-		};
-		VERIFY_SUCCEEDED(vkCreateFramebuffer(Device, &FCI, nullptr, &Framebuffers.emplace_back()));
-	}
-}
-
 void VK::CreateViewports() 
 {
 	Viewports.emplace_back(VkViewport({
@@ -673,13 +655,22 @@ void VK::CreateBuffer(VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBu
 	};
 	VERIFY_SUCCEEDED(vkCreateBuffer(Device, &BCI, nullptr, Buffer));
 
-	VkMemoryRequirements MR;
-	vkGetBufferMemoryRequirements(Device, *Buffer, &MR);
+	const VkBufferMemoryRequirementsInfo2 BMRI = {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2,
+		.pNext = nullptr,
+		.buffer = *Buffer
+	};
+	VkMemoryRequirements2 MR = {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
+		.pNext = nullptr,
+	};
+	vkGetBufferMemoryRequirements2(Device, &BMRI, &MR);
+	
 	const VkMemoryAllocateInfo MAI = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
 		.pNext = nullptr,
-		.allocationSize = MR.size,
-		.memoryTypeIndex = GetMemoryTypeIndex(MR.memoryTypeBits, MPF)
+		.allocationSize = MR.memoryRequirements.size,
+		.memoryTypeIndex = GetMemoryTypeIndex(MR.memoryRequirements.memoryTypeBits, MPF)
 	};
 	VERIFY_SUCCEEDED(vkAllocateMemory(Device, &MAI, nullptr, DeviceMemory));
 	VERIFY_SUCCEEDED(vkBindBufferMemory(Device, *Buffer, *DeviceMemory, 0));
@@ -709,13 +700,22 @@ void VK::CreateImage(VkImage* Image, VkDeviceMemory* DeviceMemory, const VkImage
 {
 	VERIFY_SUCCEEDED(vkCreateImage(Device, &ICI, nullptr, Image));
 
-	VkMemoryRequirements MR;
-	vkGetImageMemoryRequirements(Device, *Image, &MR);
+	const VkImageMemoryRequirementsInfo2 IMRI = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
+		.pNext = nullptr,
+		.image = *Image
+	};
+	VkMemoryRequirements2 MR = {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
+		.pNext = nullptr,
+	};
+	vkGetImageMemoryRequirements2(Device, &IMRI, &MR);
+
 	const VkMemoryAllocateInfo MAI = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
 		.pNext = nullptr,
-		.allocationSize = MR.size,
-		.memoryTypeIndex = GetMemoryTypeIndex(MR.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+		.allocationSize = MR.memoryRequirements.size,
+		.memoryTypeIndex = GetMemoryTypeIndex(MR.memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
 	};
 	VERIFY_SUCCEEDED(vkAllocateMemory(Device, &MAI, nullptr, DeviceMemory));
 	VERIFY_SUCCEEDED(vkBindImageMemory(Device, *Image, *DeviceMemory, 0));
@@ -723,8 +723,8 @@ void VK::CreateImage(VkImage* Image, VkDeviceMemory* DeviceMemory, const VkImage
 
 void VK::BufferMemoryBarrier(const VkCommandBuffer CB,
 	const VkBuffer Buffer,
-	const VkPipelineStageFlags SrcPSF, const VkPipelineStageFlags DstPSF,
-	const VkAccessFlags SrcAF, const VkAccessFlags DstAF) const
+	const VkPipelineStageFlags2 SrcPSF, const VkPipelineStageFlags2 DstPSF,
+	const VkAccessFlags2 SrcAF, const VkAccessFlags2 DstAF) const
 {
 	constexpr std::array<VkMemoryBarrier2, 0> MBs = {};
 	const std::array BMBs = {
@@ -741,6 +741,41 @@ void VK::BufferMemoryBarrier(const VkCommandBuffer CB,
 		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
 		.pNext = nullptr,
 		.dependencyFlags = 0,
+		.memoryBarrierCount = static_cast<uint32_t>(std::size(MBs)), .pMemoryBarriers = std::data(MBs),
+		.bufferMemoryBarrierCount = static_cast<uint32_t>(std::size(BMBs)), .pBufferMemoryBarriers = std::data(BMBs),
+		.imageMemoryBarrierCount = static_cast<uint32_t>(std::size(IMBs)), .pImageMemoryBarriers = std::data(IMBs),
+	};
+	vkCmdPipelineBarrier2(CB, &DI);
+}
+void VK::ImageMemoryBarrier(const VkCommandBuffer CB,
+	const VkImage Image,
+	const VkPipelineStageFlags2 SrcPSF, const VkPipelineStageFlags2 DstPSF,
+	const VkAccessFlags2 SrcAF, const VkAccessFlags2 DstAF,
+	const VkImageLayout OldIL, const VkImageLayout NewIL) const
+{
+	constexpr std::array<VkMemoryBarrier2, 0> MBs = {};
+	constexpr std::array<VkBufferMemoryBarrier2, 0> BMBs = {};
+	const std::array IMBs = {
+		VkImageMemoryBarrier2({
+			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.pNext = nullptr,
+			.srcStageMask = SrcPSF, .srcAccessMask = SrcAF, .dstStageMask = DstPSF, .dstAccessMask = DstAF,
+			.oldLayout = OldIL, .newLayout = NewIL,
+			.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+			.image = Image,
+			.subresourceRange = VkImageSubresourceRange({
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.baseMipLevel = 0,
+				.levelCount = 1,
+				.baseArrayLayer = 0,
+				.layerCount = 1
+			})
+		}),
+	};
+	const VkDependencyInfo DI = {
+		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		.pNext = nullptr,
+		.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
 		.memoryBarrierCount = static_cast<uint32_t>(std::size(MBs)), .pMemoryBarriers = std::data(MBs),
 		.bufferMemoryBarrierCount = static_cast<uint32_t>(std::size(BMBs)), .pBufferMemoryBarriers = std::data(BMBs),
 		.imageMemoryBarrierCount = static_cast<uint32_t>(std::size(IMBs)), .pImageMemoryBarriers = std::data(IMBs),
@@ -1216,6 +1251,23 @@ void VK::CreatePipeline(VkPipeline& PL,
 	};
 
 	CreatePipeline(PL, PSSCIs, PVISCI, PIASCI, PTSCI, PVSCI, PRSCI, PMSCI, PDSSCI, PCBSCI, PDSCI, PLL, RP);
+}
+
+void VK::CreateFramebuffer(const VkRenderPass RP)
+{
+	for (const auto& i : Swapchain.ImageAndViews) {
+		const std::array IVs = { i.second };
+		const VkFramebufferCreateInfo FCI = {
+			.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.renderPass = RP,
+			.attachmentCount = static_cast<uint32_t>(std::size(IVs)), .pAttachments = std::data(IVs),
+			.width = Swapchain.Extent.width, .height = Swapchain.Extent.height,
+			.layers = 1
+		};
+		VERIFY_SUCCEEDED(vkCreateFramebuffer(Device, &FCI, nullptr, &Framebuffers.emplace_back()));
+	}
 }
 
 void VK::PopulateSecondaryCommandBuffer(const int i) 
