@@ -135,10 +135,6 @@ public:
 
 	void CreateImage(VkImage* Image, VkDeviceMemory* DeviceMemory, const VkImageCreateInfo& ICI);
 	void CreateImageView(VkImageView* ImageView, const VkImageViewCreateInfo& IVCI) { VERIFY_SUCCEEDED(vkCreateImageView(Device, &IVCI, nullptr, ImageView)); }
-	void CreateImageAndView(VkImage* Image, VkDeviceMemory* DeviceMemory, VkImageView* ImageView, const VkImageCreateInfo& ICI, const VkImageViewCreateInfo& IVCI) {
-		CreateImage(Image, DeviceMemory, ICI);
-		CreateImageView(ImageView, IVCI);
-	}
 
 	void BufferMemoryBarrier(const VkCommandBuffer CB,
 		const VkBuffer Buffer,
@@ -230,6 +226,12 @@ public:
 	void CreateTexture_Render(const VkFormat Format, const uint32_t Width, const uint32_t Height) {
 		CreateTexture(Format, Width, Height, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
 	}
+
+	[[nodiscard]] static VkFormat ToVkFormat(const gli::format GLIFormat);
+	[[nodiscard]] static VkImageType ToVkImageType(const gli::target GLITarget);
+	[[nodiscard]] static VkImageViewType ToVkImageViewType(const gli::target GLITarget);
+	[[nodiscard]] static VkComponentSwizzle ToVkComponentSwizzle(const gli::swizzle GLISwizzle);
+	[[nodiscard]] static VkComponentMapping ToVkComponentMapping(const gli::texture::swizzles_type GLISwizzleType);
 	void CreateGLITexture(const std::filesystem::path& Path);
 
 	VkShaderModule CreateShaderModule(const std::filesystem::path& Path);

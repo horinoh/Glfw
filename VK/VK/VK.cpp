@@ -383,6 +383,7 @@ VkShaderModule VK::CreateShaderModule(const std::filesystem::path& Path)
 		}
 		In.close();
 	}
+	assert(VK_NULL_HANDLE != SM && "Shader module create failed");
 	return SM;
 };
 
@@ -919,6 +920,8 @@ void VK::CreateTexture(const VkFormat Format, const uint32_t Width, const uint32
 		.queueFamilyIndexCount = static_cast<uint32_t>(std::size(QFIs)), .pQueueFamilyIndices = std::data(QFIs),
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
 	};
+	CreateImage(&Image, &DeviceMemory, ICI);
+
 	const VkImageViewCreateInfo IVCI = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 		.pNext = nullptr,
@@ -940,7 +943,72 @@ void VK::CreateTexture(const VkFormat Format, const uint32_t Width, const uint32
 			.layerCount = VK_REMAINING_ARRAY_LAYERS
 		})
 	};
-	CreateImageAndView(&Image, &DeviceMemory, &ImageView, ICI, IVCI);
+	CreateImageView(&ImageView, IVCI);
+}
+
+VkFormat VK::ToVkFormat(const gli::format GLIFormat) 
+{
+	switch (GLIFormat) {
+		using enum gli::format;
+	case FORMAT_BGR8_UNORM_PACK32: return VK_FORMAT_A8B8G8R8_UNORM_PACK32;
+	case FORMAT_L8_UNORM_PACK8: return VK_FORMAT_R4G4_UNORM_PACK8;
+	}
+	assert(true && "Format not found");
+	return VK_FORMAT_UNDEFINED;
+}
+VkImageType VK::ToVkImageType(const gli::target GLITarget)
+{
+	switch (GLITarget) {
+		using enum gli::target;
+	case TARGET_1D:
+	case TARGET_1D_ARRAY:
+		return VK_IMAGE_TYPE_1D;
+	case TARGET_2D:
+	case TARGET_2D_ARRAY:
+	case TARGET_CUBE:
+	case TARGET_CUBE_ARRAY:
+		return VK_IMAGE_TYPE_2D;
+	case TARGET_3D:
+		return VK_IMAGE_TYPE_3D;
+	}
+	assert(true && "Image type not found");
+	return VK_IMAGE_TYPE_MAX_ENUM;
+}
+VkImageViewType VK::ToVkImageViewType(const gli::target GLITarget)
+{
+	switch (GLITarget) {
+		using enum gli::target;
+	case TARGET_1D: return VK_IMAGE_VIEW_TYPE_1D;
+	case TARGET_1D_ARRAY:return VK_IMAGE_VIEW_TYPE_1D_ARRAY;
+	case TARGET_2D:return VK_IMAGE_VIEW_TYPE_2D;
+	case TARGET_2D_ARRAY:return VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+	case TARGET_3D:return VK_IMAGE_VIEW_TYPE_3D;
+	case TARGET_CUBE:return VK_IMAGE_VIEW_TYPE_CUBE;
+	case TARGET_CUBE_ARRAY:return VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
+	}
+	assert(true && "Image view type not found");
+	return VK_IMAGE_VIEW_TYPE_MAX_ENUM;
+}
+VkComponentSwizzle VK::ToVkComponentSwizzle(const gli::swizzle GLISwizzle)
+{
+	switch (GLISwizzle) {
+	case gli::SWIZZLE_ZERO: return VK_COMPONENT_SWIZZLE_ZERO;
+	case gli::SWIZZLE_ONE: return VK_COMPONENT_SWIZZLE_ONE;
+	case gli::SWIZZLE_RED: return VK_COMPONENT_SWIZZLE_R;
+	case gli::SWIZZLE_GREEN: return VK_COMPONENT_SWIZZLE_G;
+	case gli::SWIZZLE_BLUE: return VK_COMPONENT_SWIZZLE_B;
+	case gli::SWIZZLE_ALPHA: return VK_COMPONENT_SWIZZLE_A;
+	}
+	assert(true && "Swizzle not found");
+	return VK_COMPONENT_SWIZZLE_IDENTITY;
+}
+VkComponentMapping VK::ToVkComponentMapping(const gli::texture::swizzles_type GLISwizzleType)
+{
+	return VkComponentMapping({ 
+		.r = ToVkComponentSwizzle(GLISwizzleType.r), 
+		.g = ToVkComponentSwizzle(GLISwizzleType.g), 
+		.b = ToVkComponentSwizzle(GLISwizzleType.b),
+		.a = ToVkComponentSwizzle(GLISwizzleType.a) });
 }
 void VK::CreateGLITexture(const std::filesystem::path& Path) 
 {
@@ -955,8 +1023,8 @@ void VK::CreateGLITexture(const std::filesystem::path& Path)
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 		.pNext = nullptr,
 		.flags = gli::is_target_cube(Gli.target()) ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : static_cast<VkImageCreateFlags>(0),
-		.imageType = VK_IMAGE_TYPE_2D, // from Gli.target()
-		.format = VK_FORMAT_R8G8B8_UNORM, // from Gli.format()
+		.imageType = ToVkImageType(Gli.target()), 
+		.format = ToVkFormat(Gli.format()),
 		.extent = VkExtent3D({
 			.width = static_cast<const uint32_t>(Gli.extent(0).x),
 			.height = static_cast<const uint32_t>(Gli.extent(0).y),
@@ -971,19 +1039,16 @@ void VK::CreateGLITexture(const std::filesystem::path& Path)
 		.queueFamilyIndexCount = static_cast<uint32_t>(std::size(QFIs)), .pQueueFamilyIndices = std::data(QFIs),
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
 	};
+	CreateImage(&Image, &DeviceMemory, ICI);
+
 	const VkImageViewCreateInfo IVCI = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 		.pNext = nullptr,
 		.flags = 0,
 		.image = Image,
-		.viewType = VK_IMAGE_VIEW_TYPE_2D, // from Gli.target()
-		.format = VK_FORMAT_R8G8B8_UNORM, // from Gli.format()
-		.components = VkComponentMapping({ // from Gli.swizzles()
-			.r = VK_COMPONENT_SWIZZLE_R,
-			.g = VK_COMPONENT_SWIZZLE_G,
-			.b = VK_COMPONENT_SWIZZLE_B,
-			.a = VK_COMPONENT_SWIZZLE_A
-		}),
+		.viewType = ToVkImageViewType(Gli.target()),
+		.format = ToVkFormat(Gli.format()),
+		.components = ToVkComponentMapping(Gli.swizzles()),
 		.subresourceRange = VkImageSubresourceRange({
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.baseMipLevel = 0,
@@ -992,7 +1057,7 @@ void VK::CreateGLITexture(const std::filesystem::path& Path)
 			.layerCount = VK_REMAINING_ARRAY_LAYERS
 		})
 	};
-	CreateImageAndView(&Image, &DeviceMemory, &ImageView, ICI, IVCI);
+	CreateImageView(&ImageView, IVCI);
 }
 
 void VK::CreateRenderPass(const std::vector<VkAttachmentDescription>& ADs, const std::vector<VkSubpassDescription>& SDs)
