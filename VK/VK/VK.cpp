@@ -1184,7 +1184,7 @@ void VK::CreatePipeline(VkPipeline& PL,
 	VERIFY_SUCCEEDED(vkCreateGraphicsPipelines(Device, VK_NULL_HANDLE, static_cast<uint32_t>(std::size(GPCIs)), std::data(GPCIs), nullptr, &PL));
 }
 void VK::CreatePipeline(VkPipeline& PL, 
-	const VkShaderModule VS, const VkShaderModule FS, const VkShaderModule TCS, const VkShaderModule TES, const VkShaderModule GS,
+	const VkShaderModule VS, const VkShaderModule FS, const VkShaderModule TES, const VkShaderModule TCS, const VkShaderModule GS,
 	const std::vector<VkVertexInputBindingDescription>& VIBDs, const std::vector<VkVertexInputAttributeDescription>& VIADs,
 	const VkPrimitiveTopology PT,
 	const uint32_t PatchControlPoints,
@@ -1200,11 +1200,11 @@ void VK::CreatePipeline(VkPipeline& PL,
 	if (VK_NULL_HANDLE != FS) {
 		PSSCIs.emplace_back(VkPipelineShaderStageCreateInfo({ .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .pNext = nullptr, .flags = 0, .stage = VK_SHADER_STAGE_FRAGMENT_BIT, .module = FS, .pName = "main", .pSpecializationInfo = nullptr }));
 	}
-	if (VK_NULL_HANDLE != TCS) {
-		PSSCIs.emplace_back(VkPipelineShaderStageCreateInfo({ .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .pNext = nullptr, .flags = 0, .stage = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, .module = TCS, .pName = "main", .pSpecializationInfo = nullptr }));
-	}
 	if (VK_NULL_HANDLE != TES) {
 		PSSCIs.emplace_back(VkPipelineShaderStageCreateInfo({ .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .pNext = nullptr, .flags = 0, .stage = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, .module = TES, .pName = "main", .pSpecializationInfo = nullptr }));
+	}
+	if (VK_NULL_HANDLE != TCS) {
+		PSSCIs.emplace_back(VkPipelineShaderStageCreateInfo({ .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .pNext = nullptr, .flags = 0, .stage = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, .module = TCS, .pName = "main", .pSpecializationInfo = nullptr }));
 	}
 	if (VK_NULL_HANDLE != GS) {
 		PSSCIs.emplace_back(VkPipelineShaderStageCreateInfo({ .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .pNext = nullptr, .flags = 0, .stage = VK_SHADER_STAGE_GEOMETRY_BIT, .module = GS, .pName = "main", .pSpecializationInfo = nullptr }));

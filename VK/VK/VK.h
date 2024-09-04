@@ -69,6 +69,7 @@ public:
 		CreateRenderPass();
 		CreatePipeline();
 		CreateFramebuffer();
+		CreateDescriptor();
 		CreateViewports();
 	}
 	virtual void Render() {
@@ -258,7 +259,7 @@ public:
 		const VkRenderPass RP);
 	//!< 引数をよく使うものに絞ったもの
 	void CreatePipeline(VkPipeline& PL,
-		const VkShaderModule VS, const VkShaderModule FS, const VkShaderModule TCS, const VkShaderModule TES, const VkShaderModule GS,
+		const VkShaderModule VS, const VkShaderModule FS, const VkShaderModule TES, const VkShaderModule TCS, const VkShaderModule GS,
 		const std::vector<VkVertexInputBindingDescription>& VIBDs, const std::vector<VkVertexInputAttributeDescription>& VIADs,
 		const VkPrimitiveTopology PT,
 		const uint32_t PatchControlPoints,
@@ -300,11 +301,11 @@ public:
 	}
 	//!< テッセレーションによる描画等
 	void CreatePipeline(VkPipeline& PL,
-		const VkShaderModule VS, const VkShaderModule FS, const VkShaderModule TCS, const VkShaderModule TES, const VkShaderModule GS,
+		const VkShaderModule VS, const VkShaderModule FS, const VkShaderModule TES, const VkShaderModule TCS, const VkShaderModule GS,
 		const VkPipelineLayout PLL,
 		const VkRenderPass RP) {
 		CreatePipeline(PL,
-			VS, FS, TCS, TES, GS,
+			VS, FS, TES, TCS, GS,
 			{}, {},
 			VK_PRIMITIVE_TOPOLOGY_PATCH_LIST,
 			1,
@@ -474,3 +475,4 @@ protected:
 	std::vector<VkViewport> Viewports;
 	std::vector<VkRect2D> ScissorRects;
 };
+
