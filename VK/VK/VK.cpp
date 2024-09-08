@@ -1060,20 +1060,8 @@ void VK::CreateGLITexture(const std::filesystem::path& Path)
 	CreateImageView(&ImageView, IVCI);
 }
 
-void VK::CreateRenderPass(const std::vector<VkAttachmentDescription>& ADs, const std::vector<VkSubpassDescription>& SDs)
-{
-	const std::array<VkSubpassDependency, 0> Deps;
-	const VkRenderPassCreateInfo RPCI = {
-		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-		.pNext = nullptr,
-		.flags = 0,
-		.attachmentCount = static_cast<uint32_t>(std::size(ADs)), .pAttachments = std::data(ADs),
-		.subpassCount = static_cast<uint32_t>(std::size(SDs)), .pSubpasses = std::data(SDs),
-		.dependencyCount = static_cast<uint32_t>(std::size(Deps)), .pDependencies = std::data(Deps)
-	};
-	CreateRenderPass(RPCI);
-}
-void VK::CreateRenderPass(const VkAttachmentLoadOp ALO, const VkAttachmentStoreOp ASO)
+void VK::CreateRenderPass(const VkAttachmentLoadOp ALO, const VkAttachmentStoreOp ASO,
+	const VkImageLayout Init, const VkImageLayout Final)
 {
 	const std::vector ADs = {
 		VkAttachmentDescription({
@@ -1082,7 +1070,7 @@ void VK::CreateRenderPass(const VkAttachmentLoadOp ALO, const VkAttachmentStoreO
 			.samples = VK_SAMPLE_COUNT_1_BIT,
 			.loadOp = ALO, .storeOp = ASO,
 			.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE, .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-			.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED, .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+			.initialLayout = Init, .finalLayout = Final
 		}),
 	};
 
@@ -1103,7 +1091,7 @@ void VK::CreateRenderPass(const VkAttachmentLoadOp ALO, const VkAttachmentStoreO
 	};
 	CreateRenderPass(ADs, SDs);
 }
-void VK::CreateRenderPass_Depth() 
+void VK::CreateRenderPass_Depth(const VkImageLayout Init, const VkImageLayout Final)
 {
 	const std::vector ADs = {
 		VkAttachmentDescription({
@@ -1112,7 +1100,7 @@ void VK::CreateRenderPass_Depth()
 			.samples = VK_SAMPLE_COUNT_1_BIT,
 			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR, .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 			.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE, .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-			.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED, .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+			.initialLayout = Init, .finalLayout = Final
 		}),
 		VkAttachmentDescription({
 			.flags = 0,

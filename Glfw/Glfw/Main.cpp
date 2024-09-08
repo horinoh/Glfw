@@ -37,18 +37,21 @@ public:
 	Glfw(GLFWwindow* Win) : GlfwWindow(Win) {
 		uint32_t Count = 0;
 		//!< glfwGetRequiredInstanceExtensions がプラットフォーム毎の違いを吸収してくれる
-		const auto GlfwExts = glfwGetRequiredInstanceExtensions(&Count);
-		for (uint32_t i = 0; i < Count; ++i) {
-			std::cout << "Add Extension : " << GlfwExts[i] << std::endl;
-			InstanceExtensions.emplace_back(GlfwExts[i]);
+		const auto Ptr = glfwGetRequiredInstanceExtensions(&Count);
+		//!< 「ポインタ + 個数」を span で受ける
+		const auto Span = std::span(Ptr, Count);
+		InstanceExtensions.assign(std::begin(Span), std::end(Span));
+		for (auto& i : InstanceExtensions) {
+			std::cout << "Add Extension : " << i << std::endl;
 		}
 
 		glfwGetFramebufferSize(GlfwWindow, &FBWidth, &FBHeight);
 	}
 protected:
+	GLFWwindow* GlfwWindow = nullptr;
+
 	std::vector<const char*> InstanceExtensions;
 	int FBWidth, FBHeight;
-	GLFWwindow* GlfwWindow = nullptr;
 };
 
 class TriangleGlfwVK : public VK, public Glfw
@@ -218,6 +221,26 @@ public:
 	}
 };
 
+#if false
+class DisplacementGlfwVK : public DisplacementVK, public Glfw
+{
+private:
+	using Super = DisplacementVK;
+public:
+	DisplacementGlfwVK(GLFWwindow* Win) : Glfw(Win) {}
+
+	virtual void CreateInstance() override {
+		Super::CreateInstance(InstanceExtensions);
+	}
+	virtual void CreateSurface() override {
+		VERIFY_SUCCEEDED(glfwCreateWindowSurface(Instance, GlfwWindow, nullptr, &Surface));
+	}
+	virtual void CreateSwapchain() override {
+		Super::CreateSwapchain(static_cast<const uint32_t>(FBWidth), static_cast<const uint32_t>(FBHeight));
+	}
+};
+#endif
+
 int main()
 {
 	//!< 初期化 (Initialize)
@@ -234,24 +257,21 @@ int main()
 	}
 
 	//!< モニター列挙 (Enumerate monitors)
-	int MonitorCount;
 	const auto PriMon = glfwGetPrimaryMonitor();
-	const auto Monitors = glfwGetMonitors(&MonitorCount);
-	for (auto i = 0; i < MonitorCount; ++i) {
-		const auto Mon = Monitors[i];
-		std::cout << ((PriMon == Mon) ? "P" : " ") << "[" << i << "] " << glfwGetMonitorName(Mon) << std::endl;
-		int VideModeCount;
-		const auto VideoModes = glfwGetVideoModes(Mon, &VideModeCount);
-		for (auto j = 0; j < VideModeCount; ++j) {
-			const auto VM = VideoModes[j];
-			if (j > 3) {
-				std::cout << "\t..." << std::endl;
-				break;
-			}
-			std::cout << "\t[" << j << "] " << VM.width << "x" << VM.height << " @" << VM.refreshRate << std::endl;
+	int MCount;
+	const auto MPtr = glfwGetMonitors(&MCount);
+	const auto Monitors = std::span(MPtr, MCount);
+	for (int MIndex = 0; auto & i : Monitors) {
+		std::cout << ((PriMon == i) ? "Pri" : "---") << "[" << MIndex++ << "] " << glfwGetMonitorName(i) << std::endl;
+
+		int VCount;
+		auto VPtr = glfwGetVideoModes(i, &VCount);
+		const auto VideoModes = std::span(VPtr, VCount);
+		for (int VIndex = 0; auto& j : VideoModes) {
+			std::cout << "\t[" << VIndex++ << "] " << j.width << "x" << j.height << " @" << j.refreshRate << std::endl;
 		}
 	}
-
+	
 	//!< OpenGL コンテキストを作成しない (Not create OpenGL context)
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 #ifdef USE_BORDERLESS
@@ -262,10 +282,12 @@ int main()
 	//constexpr auto Width = 1280, Height = 720;
 	constexpr auto Width = 1920, Height = 1080;
 #ifdef USE_FULLSCREEN
-	//!< フルスクリーンにする場合 (Fullscreen)
-	const auto GlfwWin = glfwCreateWindow(Width, Height, "Title", glfwGetPrimaryMonitor(), nullptr);
+	//!< フルスクリーンにする場合、プライマリモニタを使用 (Fullscreen, use primary monitor)
+	auto Monitor = glfwGetPrimaryMonitor();
 #else
-	const auto GlfwWin = glfwCreateWindow(Width, Height, "Title", nullptr, nullptr);
+	auto Monitor = nullptr;
+#endif
+	const auto GlfwWin = glfwCreateWindow(Width, Height, "Title", Monitor, nullptr);
 	{
 		int WinLeft, WinTop, WinRight, WinBottom;
 		glfwGetWindowFrameSize(GlfwWin, &WinLeft, &WinTop, &WinRight, &WinBottom);
@@ -282,13 +304,16 @@ int main()
 		glfwGetFramebufferSize(GlfwWin, &FBWidth, &GBHeight);
 		std::cout << "Framebuffer size = " << FBWidth << "x" << GBHeight << std::endl;
 	}
-#endif
 
 	//!< コールバック登録 (Register callbacks)
 	glfwSetErrorCallback(GlfwErrorCallback);
 	glfwSetKeyCallback(GlfwWin, GlfwKeyCallback);
 
+#if false
+	DisplacementGlfwVK Vk(GlfwWin);
+#else
 	TriangleGlfwVK Vk(GlfwWin);
+#endif
 	Vk.Init();
 
 	Vk.PopulateCommandBuffer();

@@ -238,11 +238,27 @@ public:
 	VkShaderModule CreateShaderModule(const std::filesystem::path& Path);
 
 	void CreateRenderPass(const VkRenderPassCreateInfo& RPCI) { VERIFY_SUCCEEDED(vkCreateRenderPass(Device, &RPCI, nullptr, &RenderPasses.emplace_back())); }
-	void CreateRenderPass(const std::vector<VkAttachmentDescription>& ADs, const std::vector<VkSubpassDescription>& SDs);
-	void CreateRenderPass(const VkAttachmentLoadOp ALO, const VkAttachmentStoreOp ASO);
-	void CreateRenderPass_None() { CreateRenderPass(VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_STORE); }
-	void CreateRenderPass_Clear() { CreateRenderPass(VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE); }
-	void CreateRenderPass_Depth();
+	void CreateRenderPass(const std::vector<VkAttachmentDescription>& ADs, const std::vector<VkSubpassDescription>& SDs) {
+		const std::array<VkSubpassDependency, 0> Deps;
+		const VkRenderPassCreateInfo RPCI = {
+			.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.attachmentCount = static_cast<uint32_t>(std::size(ADs)), .pAttachments = std::data(ADs),
+			.subpassCount = static_cast<uint32_t>(std::size(SDs)), .pSubpasses = std::data(SDs),
+			.dependencyCount = static_cast<uint32_t>(std::size(Deps)), .pDependencies = std::data(Deps)
+		};
+		CreateRenderPass(RPCI);
+	}
+	void CreateRenderPass(const VkAttachmentLoadOp ALO, const VkAttachmentStoreOp ASO,
+		const VkImageLayout Init = VK_IMAGE_LAYOUT_UNDEFINED, const VkImageLayout Final = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	void CreateRenderPass_None(const VkImageLayout Init = VK_IMAGE_LAYOUT_UNDEFINED, const VkImageLayout Final = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
+		CreateRenderPass(VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_STORE, Init, Final);
+	}
+	void CreateRenderPass_Clear(const VkImageLayout Init = VK_IMAGE_LAYOUT_UNDEFINED, const VkImageLayout Final = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) { 
+		CreateRenderPass(VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, Init, Final); 
+	}
+	void CreateRenderPass_Depth(const VkImageLayout Init = VK_IMAGE_LAYOUT_UNDEFINED, const VkImageLayout Final = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
 	void CreatePipeline(VkPipeline& PL,
 		const std::vector<VkPipelineShaderStageCreateInfo>& PSSCIs,
@@ -476,3 +492,6 @@ protected:
 	std::vector<VkRect2D> ScissorRects;
 };
 
+#if false
+#include "LKGVK.h"
+#endif
