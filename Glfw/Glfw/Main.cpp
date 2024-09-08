@@ -14,7 +14,8 @@
 #endif
 
 //#define USE_BORDERLESS
-//#define USE_FULLSCREEN
+//#define USE_PRIFULLSCREEN
+//#define USE_EXTFULLSCREEN
 
 #define USE_INDEX
 #define USE_SECONDARY_CB
@@ -256,13 +257,14 @@ int main()
 		exit(EXIT_FAILURE);
 	}
 
-	//!< モニター列挙 (Enumerate monitors)
-	const auto PriMon = glfwGetPrimaryMonitor();
+	//!< モニターとビデオモードを列挙 (Enumerate monitors and video modes)
+	using MonitorAndVideoModes = std::pair<GLFWmonitor*, std::vector<GLFWvidmode>>;
+	std::vector<MonitorAndVideoModes> MonitorAndVideos;
 	int MCount;
 	const auto MPtr = glfwGetMonitors(&MCount);
 	const auto Monitors = std::span(MPtr, MCount);
 	for (int MIndex = 0; auto & i : Monitors) {
-		std::cout << ((PriMon == i) ? "Pri" : "---") << "[" << MIndex++ << "] " << glfwGetMonitorName(i) << std::endl;
+		std::cout << ((glfwGetPrimaryMonitor() == i) ? "Pri" : "---") << "[" << MIndex++ << "] " << glfwGetMonitorName(i) << std::endl;
 
 		int VCount;
 		auto VPtr = glfwGetVideoModes(i, &VCount);
@@ -270,6 +272,8 @@ int main()
 		for (int VIndex = 0; auto& j : VideoModes) {
 			std::cout << "\t[" << VIndex++ << "] " << j.width << "x" << j.height << " @" << j.refreshRate << std::endl;
 		}
+
+		MonitorAndVideos.emplace_back(MonitorAndVideoModes({i, std::vector(std::begin(VideoModes), std::end(VideoModes))}));
 	}
 	
 	//!< OpenGL コンテキストを作成しない (Not create OpenGL context)
@@ -278,16 +282,25 @@ int main()
 	//!< ボーダーレスにする場合 (Borderless)
 	glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 #endif
-	//!< ウインドウ作成 (Create window)
-	//constexpr auto Width = 1280, Height = 720;
-	constexpr auto Width = 1920, Height = 1080;
-#ifdef USE_FULLSCREEN
-	//!< フルスクリーンにする場合、プライマリモニタを使用 (Fullscreen, use primary monitor)
-	auto Monitor = glfwGetPrimaryMonitor();
+
+#ifdef USE_EXTFULLSCREEN
+	//!< 拡張モニタ (最後の要素) を選択 (Select ext monitor)
+	const auto& MonVid = MonitorAndVideos.back();
 #else
-	auto Monitor = nullptr;
+	//!< プライマリモニタ (デフォルト) を選択 (Select primary monitor (default))
+	const auto& MonVid = *std::ranges::find_if(MonitorAndVideos, [&](const auto& i) { return i.first == glfwGetPrimaryMonitor(); });
 #endif
-	const auto GlfwWin = glfwCreateWindow(Width, Height, "Title", Monitor, nullptr);
+#if defined(USE_PRIFULLSCREEN) || defined(USE_EXTFULLSCREEN)
+	//!< 明示的にモニタを指定した場合フルスクリーンになる (Explicitly select monitor to be fullscreen)
+	const auto Monitor = MonVid.first;
+#else
+	//!< フルスクリーンにしない場合は nullptr を指定すること (Select nullptr to be windowed)
+	const auto Monitor = static_cast<GLFWmonitor*>(nullptr);
+#endif
+	//!< 解像度の高いビデオモードは最後に列挙されるようなので、最後の要素を選択 (Most high resolution vide mode will be in last element)
+	const auto& Vid = MonVid.second.back();
+	//!< ウインドウ作成 (Create window)
+	const auto GlfwWin = glfwCreateWindow(Vid.width, Vid.height, "Title", Monitor, nullptr);
 	{
 		int WinLeft, WinTop, WinRight, WinBottom;
 		glfwGetWindowFrameSize(GlfwWin, &WinLeft, &WinTop, &WinRight, &WinBottom);
