@@ -258,8 +258,6 @@ int main()
 	}
 
 	//!< モニターとビデオモードを列挙 (Enumerate monitors and video modes)
-	using MonitorAndVideoModes = std::pair<GLFWmonitor*, std::vector<GLFWvidmode>>;
-	std::vector<MonitorAndVideoModes> MonitorAndVideos;
 	int MCount;
 	const auto MPtr = glfwGetMonitors(&MCount);
 	const auto Monitors = std::span(MPtr, MCount);
@@ -272,8 +270,6 @@ int main()
 		for (int VIndex = 0; auto& j : VideoModes) {
 			std::cout << "\t[" << VIndex++ << "] " << j.width << "x" << j.height << " @" << j.refreshRate << std::endl;
 		}
-
-		MonitorAndVideos.emplace_back(MonitorAndVideoModes({i, std::vector(std::begin(VideoModes), std::end(VideoModes))}));
 	}
 	
 	//!< OpenGL コンテキストを作成しない (Not create OpenGL context)
@@ -283,24 +279,29 @@ int main()
 	glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 #endif
 
+	//!< モニタを選択
 #ifdef USE_EXTFULLSCREEN
 	//!< 拡張モニタ (最後の要素) を選択 (Select ext monitor)
-	const auto& MonVid = MonitorAndVideos.back();
+	const auto Mon = Monitors.back();
 #else
 	//!< プライマリモニタ (デフォルト) を選択 (Select primary monitor (default))
-	const auto& MonVid = *std::ranges::find_if(MonitorAndVideos, [&](const auto& i) { return i.first == glfwGetPrimaryMonitor(); });
+	const auto Mon = *std::ranges::find_if(Monitors, [&](const auto& i) { return i == glfwGetPrimaryMonitor(); });
 #endif
+
+	//!< ビデオモードを選択
+	int VCount;
+	auto VPtr = glfwGetVideoModes(Mon, &VCount);
+	//!< 解像度の高いビデオモードは最後に列挙されるようなので、最後の要素を選択 (Most high resolution vide mode will be in last element)
+	const auto Vid = std::span(VPtr, VCount).back();
+
+	//!< ウインドウ作成 (Create window)
 #if defined(USE_PRIFULLSCREEN) || defined(USE_EXTFULLSCREEN)
 	//!< 明示的にモニタを指定した場合フルスクリーンになる (Explicitly select monitor to be fullscreen)
-	const auto Monitor = MonVid.first;
+	const auto GlfwWin = glfwCreateWindow(Vid.width, Vid.height, "Title", Mon, nullptr);
 #else
 	//!< フルスクリーンにしない場合は nullptr を指定すること (Select nullptr to be windowed)
-	const auto Monitor = static_cast<GLFWmonitor*>(nullptr);
+	const auto GlfwWin = glfwCreateWindow(Vid.width, Vid.height, "Title", nullptr, nullptr);
 #endif
-	//!< 解像度の高いビデオモードは最後に列挙されるようなので、最後の要素を選択 (Most high resolution vide mode will be in last element)
-	const auto& Vid = MonVid.second.back();
-	//!< ウインドウ作成 (Create window)
-	const auto GlfwWin = glfwCreateWindow(Vid.width, Vid.height, "Title", Monitor, nullptr);
 	{
 		int WinLeft, WinTop, WinRight, WinBottom;
 		glfwGetWindowFrameSize(GlfwWin, &WinLeft, &WinTop, &WinRight, &WinBottom);
