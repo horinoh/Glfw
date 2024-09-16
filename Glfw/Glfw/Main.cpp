@@ -222,7 +222,7 @@ public:
 	}
 };
 
-#if false
+#ifdef USE_DISPLACE
 class DisplacementGlfwVK : public DisplacementVK, public Glfw
 {
 private:
@@ -323,7 +323,7 @@ int main()
 	glfwSetErrorCallback(GlfwErrorCallback);
 	glfwSetKeyCallback(GlfwWin, GlfwKeyCallback);
 
-#if false
+#ifdef USE_DISPLACE
 	DisplacementGlfwVK Vk(GlfwWin);
 #else
 	TriangleGlfwVK Vk(GlfwWin);

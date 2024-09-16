@@ -9,13 +9,19 @@
 #include <span>
 #include <thread>
 
-#include <Vulkan/vulkan.h>
+#include <vulkan/vulkan.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#pragma warning(push)
+#pragma warning(disable:4100)
+#pragma warning(disable:4244)
+#pragma warning(disable:4458)
+#pragma warning(disable:5054)
 #include <gli/gli.hpp>
 #include <gli/target.hpp>
+#pragma warning(pop)
 
 #ifdef _WIN64
 #pragma comment(lib, "vulkan-1.lib")
@@ -492,6 +498,7 @@ protected:
 	std::vector<VkRect2D> ScissorRects;
 };
 
-#if false
+//#define USE_DISPLACE
+#ifdef USE_DISPLACE
 #include "LKGVK.h"
 #endif

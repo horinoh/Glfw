@@ -526,7 +526,6 @@ void VK::CreateInstance(const std::vector<const char*>& Extensions)
 	VERIFY_SUCCEEDED(vkCreateInstance(&ICI, nullptr, &Instance));
 
 #ifdef _DEBUG
-	VkDebugUtilsMessengerEXT DebugUtilsMessenger = VK_NULL_HANDLE;
 	vkCreateDebugUtilsMessenger = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(Instance, "vkCreateDebugUtilsMessengerEXT"));
 	vkDestroyDebugUtilsMessenger = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(Instance, "vkDestroyDebugUtilsMessengerEXT"));
 	{
@@ -818,11 +817,11 @@ void VK::CreateGeometry(const std::vector<VK::GeometryCreateInfo>& GCIs)
 		GCC.GCI = &i;
 
 		//!< バーテックスバッファ、ステージングの作成 (Create vertex buffer, staging)
-		for (const auto& i : i.Vtxs) {
+		for (const auto& j : i.Vtxs) {
 			auto& VSB = GCC.VertexStagingBuffers.emplace_back(BufferAndDeviceMemory({ VK_NULL_HANDLE, VK_NULL_HANDLE }));
 			GCC.VertexStart = std::size(VertexBuffers);
-			CreateDeviceLocalBuffer(VertexBuffers.emplace_back(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, i.first);
-			CreateHostVisibleBuffer(VSB, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, i.first, i.second);
+			CreateDeviceLocalBuffer(VertexBuffers.emplace_back(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, j.first);
+			CreateHostVisibleBuffer(VSB, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, j.first, j.second);
 		}
 
 		//!< インデックスバッファ、ステージングの作成 (Create index buffer, staging)
@@ -884,9 +883,9 @@ void VK::CreateGeometry(const std::vector<VK::GeometryCreateInfo>& GCIs)
 	SubmitAndWait(CB);
 
 	for (const auto& i : GCCs) {
-		for (auto& i : i.VertexStagingBuffers) {
-			vkFreeMemory(Device, i.second, nullptr);
-			vkDestroyBuffer(Device, i.first, nullptr);
+		for (auto& j : i.VertexStagingBuffers) {
+			vkFreeMemory(Device, j.second, nullptr);
+			vkDestroyBuffer(Device, j.first, nullptr);
 		}
 		if (VK_NULL_HANDLE != i.IndexStagingBuffer.first) {
 			vkFreeMemory(Device, i.IndexStagingBuffer.second, nullptr);
@@ -1323,7 +1322,7 @@ void VK::CreateFramebuffer(const VkRenderPass RP)
 	}
 }
 
-void VK::PopulateSecondaryCommandBuffer(const int i) 
+void VK::PopulateSecondaryCommandBuffer([[maybe_unused]] const int i) 
 {
 #if 0
 	const auto RP = RenderPasses[0];
