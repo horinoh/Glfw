@@ -11,6 +11,7 @@ popd
 pushd Glfw/Glfw
 rm -rf build
 meson setup build -DGLM=../../glm -DGLI=../../gli
+glsl_compile.sh
 pushd build
 meson compile
 ./Glfw
