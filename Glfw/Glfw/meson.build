@@ -3,37 +3,40 @@ project('Glfw', 'cpp',
   default_options : ['warning_level=3', 'cpp_std=c++20'])
 
 # get_option() で取得する値は、setup の引数として指定する
-GLFW = get_option('GLFW')
 GLM = get_option('GLM')
 GLI = get_option('GLI')
 VK = '..' / '..' / 'VK' / 'VK'
 
-# OS によるライブラリ名の違い
-LIBGLFW = 'glfw3.so'
-LIBGLFW_PATH = GLFW
-# libVK.a or VK.lib
-LIBVK = 'libVK'
+# OS を調べる
+IsWin = false
 if host_machine.system() == 'windows'
-        LIBGLFW = 'glfw3dll'
-        LIBGLFW_PATH = GLFW / 'lib-vc2022'
-        LIBVK = 'VK'
+   IsWin = true
 endif
 
 # 追加のインクルード
-Inc = [ 
-        include_directories(GLFW / 'include'),
+Inc = [
         include_directories(GLM),
         include_directories(GLI),
         include_directories(VK),
 ]
+if IsWin
+        GLFW = get_option('GLFW')
+        Inc += include_directories(GLFW / 'include')
+endif
 
 # 追加のライブラリ
 Compiler = meson.get_compiler('cpp')
 Lib = [
         dependency('vulkan'),
-        Compiler.find_library(LIBGLFW, dirs : LIBGLFW_PATH),
-        Compiler.find_library(LIBVK, dirs : meson.current_source_dir() / VK / 'build'),
+        #Compiler.find_library(LIBVK, dirs : meson.current_source_dir() / VK / 'build'),
 ]
+if IsWin
+        Lib += Compiler.find_library('glfw3dll', dirs : GLFW / 'lib-vc2022')
+        Lib += Compiler.find_library('VK', dirs : meson.current_source_dir() / VK / 'build')
+else
+        Lib += dependency('glfw3')
+        Lib += Compiler.find_library('libVK', dirs : meson.current_source_dir() / VK / 'build')
+endif
 
 executable('Glfw',
            'Main.cpp',
