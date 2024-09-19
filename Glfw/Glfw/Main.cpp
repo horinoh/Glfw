@@ -69,7 +69,7 @@ public:
 		VERIFY_SUCCEEDED(glfwCreateWindowSurface(Instance, GlfwWindow, nullptr, &Surface));
 	}
 	virtual void CreateSwapchain() override {
-		Super::CreateSwapchain(static_cast<const uint32_t>(FBWidth), static_cast<const uint32_t>(FBHeight));
+		Super::CreateSwapchain(static_cast<uint32_t>(FBWidth), static_cast<uint32_t>(FBHeight));
 	}
 
 	virtual void CreateGeometry() override {
