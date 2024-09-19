@@ -155,13 +155,13 @@ void VK::CreateDevice()
 		//!< 機能を持つキューファミリインデックスを立てる (If queue family index has function, set bit)
 		std::bitset<32> GraphicsMask;
 		std::bitset<32> PresentMask;
-		for (auto i = 0; i < std::size(QFPs); ++i) {
+		for (size_t i = 0; i < std::size(QFPs); ++i) {
 			const auto& QFP = QFPs[i];
 			if (VK_QUEUE_GRAPHICS_BIT & QFP.queueFlags) {
 				GraphicsMask.set(i);
 			}
 			auto HasPresent = VK_FALSE;
-			VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfaceSupportKHR(SelectedPhysDevice.first, i, Surface, &HasPresent));
+			VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfaceSupportKHR(SelectedPhysDevice.first, static_cast<const uint32_t>(i), Surface, &HasPresent));
 			if (HasPresent) {
 				PresentMask.set(i);
 			}
@@ -414,7 +414,7 @@ void VK::AllocateCommandBuffers(const size_t Count, VkCommandBuffer* CB, const V
 		.pNext = nullptr,
 		.commandPool = CP,
 		.level = CBL,
-		.commandBufferCount = static_cast<const uint32_t>(Count)
+		.commandBufferCount = static_cast<uint32_t>(Count)
 	};
 	AllocateCommandBuffers(CB, CBAI);
 }
@@ -663,6 +663,7 @@ void VK::CreateBuffer(VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBu
 	VkMemoryRequirements2 MR = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
 		.pNext = nullptr,
+		//.memoryRequirements = VkMemoryRequirements(),
 	};
 	vkGetBufferMemoryRequirements2(Device, &BMRI, &MR);
 	
@@ -708,6 +709,7 @@ void VK::CreateImage(VkImage* Image, VkDeviceMemory* DeviceMemory, const VkImage
 	VkMemoryRequirements2 MR = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
 		.pNext = nullptr,
+		//.memoryRequirements = VkMemoryRequirements(),
 	};
 	vkGetImageMemoryRequirements2(Device, &IMRI, &MR);
 
@@ -866,7 +868,7 @@ void VK::CreateGeometry(const std::vector<VK::GeometryCreateInfo>& GCIs)
 	};
 	VERIFY_SUCCEEDED(vkBeginCommandBuffer(CB, &CBBI)); {
 		for (const auto& i : GCCs) {
-			for (auto j = 0; j < std::size(i.GCI->Vtxs); ++j) {
+			for (size_t j = 0; j < std::size(i.GCI->Vtxs); ++j) {
 				PopulateCopyCommand(CB, i.VertexStagingBuffers[j].first, VertexBuffers[i.VertexStart + j].first, i.GCI->Vtxs[j].first, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
 			}
 			if (VK_NULL_HANDLE != i.IndexStagingBuffer.first) {
@@ -1025,12 +1027,12 @@ void VK::CreateGLITexture(const std::filesystem::path& Path)
 		.imageType = ToVkImageType(Gli.target()), 
 		.format = ToVkFormat(Gli.format()),
 		.extent = VkExtent3D({
-			.width = static_cast<const uint32_t>(Gli.extent(0).x),
-			.height = static_cast<const uint32_t>(Gli.extent(0).y),
-			.depth = static_cast<const uint32_t>(Gli.extent(0).z)
+			.width = static_cast<uint32_t>(Gli.extent(0).x),
+			.height = static_cast<uint32_t>(Gli.extent(0).y),
+			.depth = static_cast<uint32_t>(Gli.extent(0).z)
 		}),
-		.mipLevels = static_cast<const uint32_t>(Gli.levels()),
-		.arrayLayers = static_cast<const uint32_t>(Gli.layers()) * static_cast<const uint32_t>(Gli.faces()),
+		.mipLevels = static_cast<uint32_t>(Gli.levels()),
+		.arrayLayers = static_cast<uint32_t>(Gli.layers()) * static_cast<uint32_t>(Gli.faces()),
 		.samples = VK_SAMPLE_COUNT_1_BIT,
 		.tiling = VK_IMAGE_TILING_OPTIMAL,
 		.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,

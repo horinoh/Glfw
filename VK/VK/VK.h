@@ -14,16 +14,19 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+
+#ifdef _WIN64
 #pragma warning(push)
 #pragma warning(disable:4100)
+#pragma warning(disable:4189)
 #pragma warning(disable:4244)
 #pragma warning(disable:4458)
 #pragma warning(disable:5054)
+#endif
 #include <gli/gli.hpp>
 #include <gli/target.hpp>
-#pragma warning(pop)
-
 #ifdef _WIN64
+#pragma warning(pop)
 #pragma comment(lib, "vulkan-1.lib")
 #endif
 
@@ -109,7 +112,7 @@ public:
 	virtual void CreateViewports();
 
 	virtual void PopulateCommandBuffer() {
-		for (auto i = 0; i < std::size(Swapchain.ImageAndViews); ++i) {
+		for (auto i = 0; i < static_cast<const int>(std::size(Swapchain.ImageAndViews)); ++i) {
 			PopulateSecondaryCommandBuffer(i);
 			PopulatePrimaryCommandBuffer(i);
 		}
