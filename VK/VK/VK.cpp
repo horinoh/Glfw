@@ -663,7 +663,7 @@ void VK::CreateBuffer(VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBu
 	VkMemoryRequirements2 MR = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
 		.pNext = nullptr,
-		//.memoryRequirements = VkMemoryRequirements(),
+		.memoryRequirements = VkMemoryRequirements({.size = 0, .alignment = 0,.memoryTypeBits = 0 }),
 	};
 	vkGetBufferMemoryRequirements2(Device, &BMRI, &MR);
 	
@@ -709,7 +709,7 @@ void VK::CreateImage(VkImage* Image, VkDeviceMemory* DeviceMemory, const VkImage
 	VkMemoryRequirements2 MR = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
 		.pNext = nullptr,
-		//.memoryRequirements = VkMemoryRequirements(),
+		.memoryRequirements = VkMemoryRequirements({.size = 0, .alignment = 0,.memoryTypeBits = 0 }),
 	};
 	vkGetImageMemoryRequirements2(Device, &IMRI, &MR);
 
