@@ -35,7 +35,7 @@ if IsWin
         Lib += Compiler.find_library('VK', dirs : meson.current_source_dir() / VK / 'build')
 else
         Lib += dependency('glfw3')
-        Lib += Compiler.find_library('libVK', dirs : meson.current_source_dir() / VK / 'build')
+        Lib += Compiler.find_library('VK', dirs : meson.current_source_dir() / VK / 'build')
 endif
 
 executable('Glfw',
@@ -46,5 +46,5 @@ executable('Glfw',
 
 # GLSL コンパイル
 foreach i : [ 'Glfw.vert', 'Glfw.frag' ]
-        run_command('glslangValidator', '-V', i, '-o', 'build' / i + '.spv', '--target-env', 'vulkan1.3', '-g', '-Od')
+        run_command('glslangValidator', '-V', i, '-o', 'build' / i + '.spv', '--target-env', 'vulkan1.3', '-g', '-Od', check: true)
 endforeach
