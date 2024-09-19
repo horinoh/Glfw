@@ -161,7 +161,7 @@ void VK::CreateDevice()
 				GraphicsMask.set(i);
 			}
 			auto HasPresent = VK_FALSE;
-			VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfaceSupportKHR(SelectedPhysDevice.first, static_cast<const uint32_t>(i), Surface, &HasPresent));
+			VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfaceSupportKHR(SelectedPhysDevice.first, static_cast<uint32_t>(i), Surface, &HasPresent));
 			if (HasPresent) {
 				PresentMask.set(i);
 			}
@@ -207,7 +207,7 @@ void VK::CreateDevice()
 		const std::array Extensions = {
 			VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 		};
-#pragma region VULKAN_FEATURE
+//#pragma region VULKAN_FEATURE
 		VkPhysicalDeviceVulkan11Features PDV11F = {
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
 			.pNext = nullptr,
@@ -294,7 +294,7 @@ void VK::CreateDevice()
 			.shaderIntegerDotProduct = VK_FALSE,
 			.maintenance4 = VK_FALSE,
 		};
-#pragma endregion
+//#pragma endregion
 		VkPhysicalDeviceFeatures PDF;
 		vkGetPhysicalDeviceFeatures(SelectedPhysDevice.first, &PDF);
 		const VkDeviceCreateInfo DCI = {
@@ -953,9 +953,10 @@ VkFormat VK::ToVkFormat(const gli::format GLIFormat)
 		using enum gli::format;
 	case FORMAT_BGR8_UNORM_PACK32: return VK_FORMAT_A8B8G8R8_UNORM_PACK32;
 	case FORMAT_L8_UNORM_PACK8: return VK_FORMAT_R4G4_UNORM_PACK8;
+	default:
+		assert(true && "Format not found");
+		return VK_FORMAT_UNDEFINED;
 	}
-	assert(true && "Format not found");
-	return VK_FORMAT_UNDEFINED;
 }
 VkImageType VK::ToVkImageType(const gli::target GLITarget)
 {
@@ -971,9 +972,10 @@ VkImageType VK::ToVkImageType(const gli::target GLITarget)
 		return VK_IMAGE_TYPE_2D;
 	case TARGET_3D:
 		return VK_IMAGE_TYPE_3D;
+	default:
+		assert(true && "Image type not found");
+		return VK_IMAGE_TYPE_MAX_ENUM;
 	}
-	assert(true && "Image type not found");
-	return VK_IMAGE_TYPE_MAX_ENUM;
 }
 VkImageViewType VK::ToVkImageViewType(const gli::target GLITarget)
 {
@@ -986,9 +988,10 @@ VkImageViewType VK::ToVkImageViewType(const gli::target GLITarget)
 	case TARGET_3D:return VK_IMAGE_VIEW_TYPE_3D;
 	case TARGET_CUBE:return VK_IMAGE_VIEW_TYPE_CUBE;
 	case TARGET_CUBE_ARRAY:return VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
+	default:
+		assert(true && "Image view type not found");
+		return VK_IMAGE_VIEW_TYPE_MAX_ENUM;
 	}
-	assert(true && "Image view type not found");
-	return VK_IMAGE_VIEW_TYPE_MAX_ENUM;
 }
 VkComponentSwizzle VK::ToVkComponentSwizzle(const gli::swizzle GLISwizzle)
 {
@@ -999,9 +1002,10 @@ VkComponentSwizzle VK::ToVkComponentSwizzle(const gli::swizzle GLISwizzle)
 	case gli::SWIZZLE_GREEN: return VK_COMPONENT_SWIZZLE_G;
 	case gli::SWIZZLE_BLUE: return VK_COMPONENT_SWIZZLE_B;
 	case gli::SWIZZLE_ALPHA: return VK_COMPONENT_SWIZZLE_A;
+	default:
+		assert(true && "Swizzle not found");
+		return VK_COMPONENT_SWIZZLE_IDENTITY;
 	}
-	assert(true && "Swizzle not found");
-	return VK_COMPONENT_SWIZZLE_IDENTITY;
 }
 VkComponentMapping VK::ToVkComponentMapping(const gli::texture::swizzles_type GLISwizzleType)
 {
@@ -1023,7 +1027,7 @@ void VK::CreateGLITexture(const std::filesystem::path& Path)
 	const VkImageCreateInfo ICI = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 		.pNext = nullptr,
-		.flags = gli::is_target_cube(Gli.target()) ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : static_cast<VkImageCreateFlags>(0),
+		.flags = static_cast<VkImageCreateFlags>(gli::is_target_cube(Gli.target()) ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0),
 		.imageType = ToVkImageType(Gli.target()), 
 		.format = ToVkFormat(Gli.format()),
 		.extent = VkExtent3D({

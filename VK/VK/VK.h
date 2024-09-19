@@ -112,7 +112,7 @@ public:
 	virtual void CreateViewports();
 
 	virtual void PopulateCommandBuffer() {
-		for (auto i = 0; i < static_cast<const int>(std::size(Swapchain.ImageAndViews)); ++i) {
+		for (auto i = 0; i < static_cast<int>(std::size(Swapchain.ImageAndViews)); ++i) {
 			PopulateSecondaryCommandBuffer(i);
 			PopulatePrimaryCommandBuffer(i);
 		}
