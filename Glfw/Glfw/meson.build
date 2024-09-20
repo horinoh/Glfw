@@ -19,12 +19,13 @@ endif
 Compiler = meson.get_compiler('cpp')
 Lib = [
         dependency('vulkan'),
-        
-        Compiler.find_library('glfw3dll', dirs : get_option('GLFW') / 'lib-vc2022', required : IsWin),
-        dependency('glfw3', required : false == IsWin),
-        
         Compiler.find_library('VK', dirs : meson.current_source_dir() / VK / 'build')
 ]
+if IsWin
+        Lib += Compiler.find_library('glfw3dll', dirs : get_option('GLFW') / 'lib-vc2022')
+else
+        Lib += dependency('glfw3')
+endif
 
 executable('Glfw', 'Main.cpp', install : true, include_directories : Inc, dependencies : Lib)
 
