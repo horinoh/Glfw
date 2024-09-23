@@ -302,6 +302,9 @@ int main()
 	//!< フルスクリーンにしない場合は nullptr を指定すること (Select nullptr to be windowed)
 	const auto GlfwWin = glfwCreateWindow(Vid.width, Vid.height, "Title", nullptr, nullptr);
 #endif
+	//!< コールバック登録 (Register callbacks) ウインドウ作成直後にやっておく
+	glfwSetErrorCallback(GlfwErrorCallback);
+	glfwSetKeyCallback(GlfwWin, GlfwKeyCallback); 
 	{
 		int WinLeft, WinTop, WinRight, WinBottom;
 		glfwGetWindowFrameSize(GlfwWin, &WinLeft, &WinTop, &WinRight, &WinBottom);
@@ -318,10 +321,6 @@ int main()
 		glfwGetFramebufferSize(GlfwWin, &FBWidth, &GBHeight);
 		std::cout << "Framebuffer size = " << FBWidth << "x" << GBHeight << std::endl;
 	}
-
-	//!< コールバック登録 (Register callbacks)
-	glfwSetErrorCallback(GlfwErrorCallback);
-	glfwSetKeyCallback(GlfwWin, GlfwKeyCallback);
 
 #ifdef USE_DISPLACE
 	DisplacementGlfwVK Vk(GlfwWin);
