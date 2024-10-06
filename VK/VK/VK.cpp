@@ -753,7 +753,8 @@ void VK::ImageMemoryBarrier(const VkCommandBuffer CB,
 	const VkImage Image,
 	const VkPipelineStageFlags2 SrcPSF, const VkPipelineStageFlags2 DstPSF,
 	const VkAccessFlags2 SrcAF, const VkAccessFlags2 DstAF,
-	const VkImageLayout OldIL, const VkImageLayout NewIL) const
+	const VkImageLayout OldIL, const VkImageLayout NewIL,
+	const VkImageSubresourceRange& ISR) const
 {
 	constexpr std::array<VkMemoryBarrier2, 0> MBs = {};
 	constexpr std::array<VkBufferMemoryBarrier2, 0> BMBs = {};
@@ -765,13 +766,7 @@ void VK::ImageMemoryBarrier(const VkCommandBuffer CB,
 			.oldLayout = OldIL, .newLayout = NewIL,
 			.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
 			.image = Image,
-			.subresourceRange = VkImageSubresourceRange({
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.baseMipLevel = 0,
-				.levelCount = 1,
-				.baseArrayLayer = 0,
-				.layerCount = 1
-			})
+			.subresourceRange = ISR,
 		}),
 	};
 	const VkDependencyInfo DI = {
@@ -784,18 +779,68 @@ void VK::ImageMemoryBarrier(const VkCommandBuffer CB,
 	};
 	vkCmdPipelineBarrier2(CB, &DI);
 }
-void VK::PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkBuffer Buffer, const size_t Size, const VkAccessFlags AF, const VkPipelineStageFlagBits PSF) const
+void VK::PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkBuffer Buffer, const size_t Size, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const
 {
 	BufferMemoryBarrier(CB, Buffer,
-		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-		0, VK_ACCESS_MEMORY_WRITE_BIT);
+		VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+		0, VK_ACCESS_2_MEMORY_WRITE_BIT);
 	{
 		const std::array BCs = { VkBufferCopy({.srcOffset = 0, .dstOffset = 0, .size = Size }), };
 		vkCmdCopyBuffer(CB, Staging, Buffer, static_cast<uint32_t>(std::size(BCs)), std::data(BCs));
 	}
 	BufferMemoryBarrier(CB, Buffer,
-		VK_PIPELINE_STAGE_TRANSFER_BIT, PSF,
-		VK_ACCESS_MEMORY_WRITE_BIT, AF);
+		VK_PIPELINE_STAGE_2_TRANSFER_BIT, PSF,
+		VK_ACCESS_2_MEMORY_WRITE_BIT, AF);
+}
+void VK::PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkImage Image, const std::span<VkBufferImageCopy2>& BICs, const VkImageSubresourceRange& ISR, const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const
+{
+	ImageMemoryBarrier(CB,
+		Image,
+		VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+		0, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		ISR);
+	{
+		const VkCopyBufferToImageInfo2 CBTII2 = {
+			.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2,
+			.pNext = nullptr,
+			.srcBuffer = Staging, .dstImage = Image,
+			.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			.regionCount = static_cast<uint32_t>(std::size(BICs)), .pRegions = std::data(BICs)
+		};
+		vkCmdCopyBufferToImage2(CB, &CBTII2);
+	}
+	ImageMemoryBarrier(CB,
+		Image,
+		VK_PIPELINE_STAGE_2_TRANSFER_BIT, PSF,
+		VK_ACCESS_2_TRANSFER_WRITE_BIT, AF,
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, IL,
+		ISR);
+}
+void VK::PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkImage Image, const gli::texture& Gli, const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const
+{
+	const auto Layers = static_cast<const uint32_t>(Gli.layers()) * static_cast<const uint32_t>(Gli.faces());
+	const auto Levels = static_cast<const uint32_t>(Gli.levels());
+	std::vector<VkBufferImageCopy2> BICs; BICs.reserve(Layers * Levels);
+	VkDeviceSize Offset = 0;
+	for (uint32_t i = 0; i < Layers; ++i) {
+		for (uint32_t j = 0; j < Levels; ++j) {
+			BICs.emplace_back(VkBufferImageCopy2({
+				.sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2,
+				.pNext = nullptr,
+				.bufferOffset = Offset, .bufferRowLength = 0, .bufferImageHeight = 0,
+				.imageSubresource = VkImageSubresourceLayers({.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = j, .baseArrayLayer = i, .layerCount = 1 }),
+				.imageOffset = VkOffset3D({.x = 0, .y = 0, .z = 0 }),
+				.imageExtent = VkExtent3D({.width = static_cast<const uint32_t>(Gli.extent(j).x), .height = static_cast<const uint32_t>(Gli.extent(j).y), .depth = static_cast<const uint32_t>(Gli.extent(j).z) }) }));
+			Offset += static_cast<const VkDeviceSize>(Gli.size(j));
+		}
+	}
+	constexpr auto ISR = VkImageSubresourceRange({
+		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+		.baseMipLevel = 0, .levelCount = VK_REMAINING_MIP_LEVELS,
+		.baseArrayLayer = 0, .layerCount = VK_REMAINING_ARRAY_LAYERS
+	});
+	PopulateCopyCommand(CB, Staging, Image, BICs, ISR, IL, AF, PSF);
 }
 
 void VK::CreateGeometry(const std::vector<VK::GeometryCreateInfo>& GCIs)
@@ -869,14 +914,14 @@ void VK::CreateGeometry(const std::vector<VK::GeometryCreateInfo>& GCIs)
 	VERIFY_SUCCEEDED(vkBeginCommandBuffer(CB, &CBBI)); {
 		for (const auto& i : GCCs) {
 			for (size_t j = 0; j < std::size(i.GCI->Vtxs); ++j) {
-				PopulateCopyCommand(CB, i.VertexStagingBuffers[j].first, VertexBuffers[i.VertexStart + j].first, i.GCI->Vtxs[j].first, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
+				PopulateCopyCommand(CB, i.VertexStagingBuffers[j], VertexBuffers[i.VertexStart + j], i.GCI->Vtxs[j], VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
 			}
 			if (VK_NULL_HANDLE != i.IndexStagingBuffer.first) {
-				PopulateCopyCommand(CB, i.IndexStagingBuffer.first, IndexBuffers[i.IndexStart].first, i.GCI->Idx.first, VK_ACCESS_INDEX_READ_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
-				PopulateCopyCommand(CB, i.IndirectStagingBuffer.first, IndirectBuffers[i.IndirectStart].first, sizeof(i.DIIC), VK_ACCESS_INDIRECT_COMMAND_READ_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT);
+				PopulateCopyCommand(CB, i.IndexStagingBuffer, IndexBuffers[i.IndexStart], i.GCI->Idx, VK_ACCESS_INDEX_READ_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT);
+				PopulateCopyCommand(CB, i.IndirectStagingBuffer, IndirectBuffers[i.IndirectStart], sizeof(i.DIIC), VK_ACCESS_INDIRECT_COMMAND_READ_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT);
 			}
 			else {
-				PopulateCopyCommand(CB, i.IndirectStagingBuffer.first, IndirectBuffers[i.IndirectStart].first, sizeof(i.DIC), VK_ACCESS_INDIRECT_COMMAND_READ_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT);
+				PopulateCopyCommand(CB, i.IndirectStagingBuffer, IndirectBuffers[i.IndirectStart], sizeof(i.DIC), VK_ACCESS_INDIRECT_COMMAND_READ_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT);
 			}
 		}
 	} VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
@@ -1015,14 +1060,14 @@ VkComponentMapping VK::ToVkComponentMapping(const gli::texture::swizzles_type GL
 		.b = ToVkComponentSwizzle(GLISwizzleType.b),
 		.a = ToVkComponentSwizzle(GLISwizzleType.a) });
 }
-void VK::CreateGLITexture(const std::filesystem::path& Path) 
+void VK::CreateGLITexture(const std::filesystem::path & Path, gli::texture& Gli)
 {
 	auto& Tex = Textures.emplace_back();
 	auto& Image = Tex.first.first;
 	auto& ImageView = Tex.first.second;
 	auto& DeviceMemory = Tex.second;
 
-	auto Gli = gli::load(std::data(Path.string()));
+	Gli = gli::load(std::data(Path.string()));
 	constexpr std::array<uint32_t, 0> QFIs = {};
 	const VkImageCreateInfo ICI = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -1056,10 +1101,8 @@ void VK::CreateGLITexture(const std::filesystem::path& Path)
 		.components = ToVkComponentMapping(Gli.swizzles()),
 		.subresourceRange = VkImageSubresourceRange({
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.baseMipLevel = 0,
-			.levelCount = VK_REMAINING_MIP_LEVELS,
-			.baseArrayLayer = 0,
-			.layerCount = VK_REMAINING_ARRAY_LAYERS
+			.baseMipLevel = 0, .levelCount = VK_REMAINING_MIP_LEVELS,
+			.baseArrayLayer = 0, .layerCount = VK_REMAINING_ARRAY_LAYERS
 		})
 	};
 	CreateImageView(&ImageView, IVCI);
