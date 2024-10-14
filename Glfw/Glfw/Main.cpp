@@ -222,26 +222,6 @@ public:
 	}
 };
 
-#ifdef USE_DISPLACE
-class DisplacementGlfwVK : public DisplacementVK, public Glfw
-{
-private:
-	using Super = DisplacementVK;
-public:
-	DisplacementGlfwVK(GLFWwindow* Win) : Glfw(Win) {}
-
-	virtual void CreateInstance() override {
-		Super::CreateInstance(InstanceExtensions);
-	}
-	virtual void CreateSurface() override {
-		VERIFY_SUCCEEDED(glfwCreateWindowSurface(Instance, GlfwWindow, nullptr, &Surface));
-	}
-	virtual void CreateSwapchain() override {
-		Super::CreateSwapchain(static_cast<const uint32_t>(FBWidth), static_cast<const uint32_t>(FBHeight));
-	}
-};
-#endif
-
 int main()
 {
 	//!< ‰Šú‰» (Initialize)
@@ -322,11 +302,7 @@ int main()
 		std::cout << "Framebuffer size = " << FBWidth << "x" << GBHeight << std::endl;
 	}
 
-#ifdef USE_DISPLACE
-	DisplacementGlfwVK Vk(GlfwWin);
-#else
 	TriangleGlfwVK Vk(GlfwWin);
-#endif
 	Vk.Init();
 
 	Vk.PopulateCommandBuffer();

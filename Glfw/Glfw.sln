@@ -10,6 +10,11 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Glfw", "Glfw\Glfw.vcxproj",
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "VK", "..\VK\VK\VK.vcxproj", "{05B1702F-7509-48E9-991F-FB027FE0372C}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LookingGlass", "LookingGlass\LookingGlass.vcxproj", "{E3BE68BB-EA98-418D-94E2-48CB8AA0620E}"
+	ProjectSection(ProjectDependencies) = postProject
+		{05B1702F-7509-48E9-991F-FB027FE0372C} = {05B1702F-7509-48E9-991F-FB027FE0372C}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -34,6 +39,14 @@ Global
 		{05B1702F-7509-48E9-991F-FB027FE0372C}.Release|x64.Build.0 = Release|x64
 		{05B1702F-7509-48E9-991F-FB027FE0372C}.Release|x86.ActiveCfg = Release|Win32
 		{05B1702F-7509-48E9-991F-FB027FE0372C}.Release|x86.Build.0 = Release|Win32
+		{E3BE68BB-EA98-418D-94E2-48CB8AA0620E}.Debug|x64.ActiveCfg = Debug|x64
+		{E3BE68BB-EA98-418D-94E2-48CB8AA0620E}.Debug|x64.Build.0 = Debug|x64
+		{E3BE68BB-EA98-418D-94E2-48CB8AA0620E}.Debug|x86.ActiveCfg = Debug|Win32
+		{E3BE68BB-EA98-418D-94E2-48CB8AA0620E}.Debug|x86.Build.0 = Debug|Win32
+		{E3BE68BB-EA98-418D-94E2-48CB8AA0620E}.Release|x64.ActiveCfg = Release|x64
+		{E3BE68BB-EA98-418D-94E2-48CB8AA0620E}.Release|x64.Build.0 = Release|x64
+		{E3BE68BB-EA98-418D-94E2-48CB8AA0620E}.Release|x86.ActiveCfg = Release|Win32
+		{E3BE68BB-EA98-418D-94E2-48CB8AA0620E}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

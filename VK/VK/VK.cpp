@@ -641,6 +641,30 @@ uint32_t VK::GetMemoryTypeIndex(const uint32_t TypeBits, const VkMemoryPropertyF
 	}
 	return (std::numeric_limits<uint32_t>::max)();
 }
+
+void VK::CopyToHostVisibleMemory(const VkDeviceMemory DeviceMemory, const VkDeviceSize Offset, const VkDeviceSize Size, const void* Source, const VkDeviceSize MappedRangeOffset, const VkDeviceSize MappedRangeSize) const
+{
+	void* Data;
+	VERIFY_SUCCEEDED(vkMapMemory(Device, DeviceMemory, Offset, MappedRangeSize, static_cast<VkMemoryMapFlags>(0), &Data)); {
+		std::memcpy(Data, Source, Size);
+
+		//!< メモリコンテンツが変更されたことを明示的にドライバへ知らせる (vkMapMemory()した状態でやること)
+		if (true/*!VK_MEMORY_PROPERTY_HOST_COHERENT_BIT*/) {
+			const std::array MMRs = {
+				VkMappedMemoryRange({
+					.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+					.pNext = nullptr,
+					.memory = DeviceMemory,
+					.offset = MappedRangeOffset,
+					.size = MappedRangeSize
+				})
+			};
+			VERIFY_SUCCEEDED(vkFlushMappedMemoryRanges(Device, static_cast<uint32_t>(std::size(MMRs)), std::data(MMRs)));
+		}
+
+	} vkUnmapMemory(Device, DeviceMemory);
+}
+
 void VK::CreateBuffer(VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBufferUsageFlags BUF, const VkMemoryPropertyFlags MPF, const size_t Size, const void* Source) const
 {
 	constexpr std::array<uint32_t, 0> QFI = {};
@@ -676,24 +700,8 @@ void VK::CreateBuffer(VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBu
 	VERIFY_SUCCEEDED(vkAllocateMemory(Device, &MAI, nullptr, DeviceMemory));
 	VERIFY_SUCCEEDED(vkBindBufferMemory(Device, *Buffer, *DeviceMemory, 0));
 
-	if (nullptr != Source) {
-		constexpr auto MapSize = VK_WHOLE_SIZE;
-		void* Data;
-		VERIFY_SUCCEEDED(vkMapMemory(Device, *DeviceMemory, 0, MapSize, static_cast<VkMemoryMapFlags>(0), &Data)); {
-			memcpy(Data, Source, Size);
-			//!< メモリコンテンツが変更されたことを明示的にドライバへ知らせる(vkMapMemory()した状態でやること)
-			if (!(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT & BUF)) {
-				const std::array MMRs = {
-					VkMappedMemoryRange({
-						.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-						.pNext = nullptr,
-						.memory = *DeviceMemory,
-						.offset = 0, .size = MapSize
-					}),
-				};
-				VERIFY_SUCCEEDED(vkFlushMappedMemoryRanges(Device, static_cast<uint32_t>(std::size(MMRs)), std::data(MMRs)));
-			}
-		} vkUnmapMemory(Device, *DeviceMemory);
+	if (Size && nullptr != Source) {
+		CopyToHostVisibleMemory(*DeviceMemory, 0, Size, Source);
 	}
 }
 

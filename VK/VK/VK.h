@@ -134,6 +134,8 @@ public:
 	void CreateInstance(const std::vector<const char*>& Extensions);
 	void CreateSwapchain(const uint32_t Width, const uint32_t Height);
 
+	void CopyToHostVisibleMemory(const VkDeviceMemory DeviceMemory, const VkDeviceSize Offset, const VkDeviceSize Size, const void* Source, const VkDeviceSize MappedRangeOffset = 0, const VkDeviceSize MappedRangeSize = VK_WHOLE_SIZE) const;
+
 	uint32_t GetMemoryTypeIndex(const uint32_t TypeBits, const VkMemoryPropertyFlags MPF) const;
 	void CreateBuffer(VkBuffer* Buffer, VkDeviceMemory* DeviceMemory, const VkBufferUsageFlags BUF, const VkMemoryPropertyFlags MPF, const size_t Size, const void* Source = nullptr) const;
 	void CreateBuffer(BufferAndDeviceMemory& BADM, const VkBufferUsageFlags BUF, const VkMemoryPropertyFlags MPF, const size_t Size, const void* Source = nullptr) const {
@@ -531,8 +533,3 @@ protected:
 	std::vector<VkViewport> Viewports;
 	std::vector<VkRect2D> ScissorRects;
 };
-
-//#define USE_DISPLACE
-#ifdef USE_DISPLACE
-#include "LKGVK.h"
-#endif
