@@ -831,7 +831,7 @@ void VK::PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, c
 				.bufferOffset = Offset, .bufferRowLength = 0, .bufferImageHeight = 0,
 				.imageSubresource = VkImageSubresourceLayers({.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = j, .baseArrayLayer = i, .layerCount = 1 }),
 				.imageOffset = VkOffset3D({.x = 0, .y = 0, .z = 0 }),
-				.imageExtent = VkExtent3D({.width = static_cast<uint32_t>(Gli.extent(j).x), .height = static_cast<uint32_t>(Gli.extent(j).y), .depth = static_cast<const uint32_t>(Gli.extent(j).z) }) }));
+				.imageExtent = VkExtent3D({.width = static_cast<uint32_t>(Gli.extent(j).x), .height = static_cast<uint32_t>(Gli.extent(j).y), .depth = static_cast<uint32_t>(Gli.extent(j).z) }) }));
 			Offset += static_cast<VkDeviceSize>(Gli.size(j));
 		}
 	}
