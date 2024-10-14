@@ -20,8 +20,24 @@
 #pragma comment(lib, "vulkan-1.lib")
 #endif
 
+//!< std::breakpoint() c++26
+#ifdef _WIN64
 #ifdef _DEBUG
-#define VERIFY_SUCCEEDED(X) { const auto VR = (X); if(VK_SUCCESS != VR) { std::cerr << VR << std::endl; /*__debugbreak();*/ } }
+#define BREAKPOINT() __debugbreak()
+#else
+#define BREAKPOINT()
+#endif
+#else
+#ifdef _DEBUG
+#include <signal.h>
+#define BREAKPOINT() raise(SIGTRAP)
+#else
+#define BREAKPOINT()
+#endif
+#endif
+
+#ifdef _DEBUG
+#define VERIFY_SUCCEEDED(X) { const auto VR = (X); if(VK_SUCCESS != VR) { std::cerr << VR << std::endl; BREAKPOINT(); } }
 #else
 #define VERIFY_SUCCEEDED(X) (X) 
 #endif

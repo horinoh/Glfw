@@ -819,8 +819,8 @@ void VK::PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, c
 }
 void VK::PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkImage Image, const gli::texture& Gli, const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const
 {
-	const auto Layers = static_cast<const uint32_t>(Gli.layers()) * static_cast<const uint32_t>(Gli.faces());
-	const auto Levels = static_cast<const uint32_t>(Gli.levels());
+	const auto Layers = static_cast<uint32_t>(Gli.layers()) * static_cast<uint32_t>(Gli.faces());
+	const auto Levels = static_cast<uint32_t>(Gli.levels());
 	std::vector<VkBufferImageCopy2> BICs; BICs.reserve(Layers * Levels);
 	VkDeviceSize Offset = 0;
 	for (uint32_t i = 0; i < Layers; ++i) {
@@ -831,8 +831,8 @@ void VK::PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, c
 				.bufferOffset = Offset, .bufferRowLength = 0, .bufferImageHeight = 0,
 				.imageSubresource = VkImageSubresourceLayers({.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = j, .baseArrayLayer = i, .layerCount = 1 }),
 				.imageOffset = VkOffset3D({.x = 0, .y = 0, .z = 0 }),
-				.imageExtent = VkExtent3D({.width = static_cast<const uint32_t>(Gli.extent(j).x), .height = static_cast<const uint32_t>(Gli.extent(j).y), .depth = static_cast<const uint32_t>(Gli.extent(j).z) }) }));
-			Offset += static_cast<const VkDeviceSize>(Gli.size(j));
+				.imageExtent = VkExtent3D({.width = static_cast<uint32_t>(Gli.extent(j).x), .height = static_cast<uint32_t>(Gli.extent(j).y), .depth = static_cast<const uint32_t>(Gli.extent(j).z) }) }));
+			Offset += static_cast<VkDeviceSize>(Gli.size(j));
 		}
 	}
 	constexpr auto ISR = VkImageSubresourceRange({

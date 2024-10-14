@@ -85,7 +85,7 @@ public:
 		};
 		VK::CreateGeometry(SIZE_DATA(Vertices),
 			SIZE_DATA(Indices),
-			std::size(Indices), 1);
+			static_cast<uint32_t>(std::size(Indices)), 1);
 #else
 		VK::CreateGeometry(SIZE_DATA(Vertices), std::size(Vertices), 1);
 #endif
