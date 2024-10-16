@@ -247,11 +247,11 @@ int main()
 		int VCount;
 		auto VPtr = glfwGetVideoModes(i, &VCount);
 		const auto VideoModes = std::span(VPtr, VCount);
-		for (int VIndex = 0; auto& j : VideoModes) {
+		for (int VIndex = 0; auto & j : VideoModes) {
 			std::cout << "\t[" << VIndex++ << "] " << j.width << "x" << j.height << " @" << j.refreshRate << std::endl;
 		}
 	}
-	
+
 	//!< OpenGL コンテキストを作成しない (Not create OpenGL context)
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 #ifdef USE_BORDERLESS
@@ -259,28 +259,35 @@ int main()
 	glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 #endif
 
+	auto Width = 800, Height = 600;
 	//!< モニタを選択
+	if (!std::empty(Monitors)) {
 #ifdef USE_EXTFULLSCREEN
-	//!< 拡張モニタ (最後の要素) を選択 (Select ext monitor)
-	const auto Mon = Monitors.back();
+		//!< 拡張モニタ (最後の要素) を選択 (Select ext monitor)
+		const auto Mon = Monitors.back();
 #else
-	//!< プライマリモニタ (デフォルト) を選択 (Select primary monitor (default))
-	const auto Mon = *std::ranges::find_if(Monitors, [&](const auto& i) { return i == glfwGetPrimaryMonitor(); });
+		//!< プライマリモニタ (デフォルト) を選択 (Select primary monitor (default))
+		const auto Mon = *std::ranges::find_if(Monitors, [&](const auto& i) { return i == glfwGetPrimaryMonitor(); });
 #endif
-
-	//!< ビデオモードを選択
-	int VCount;
-	auto VPtr = glfwGetVideoModes(Mon, &VCount);
-	//!< 解像度の高いビデオモードは最後に列挙されるようなので、最後の要素を選択 (Most high resolution vide mode will be in last element)
-	const auto Vid = std::span(VPtr, VCount).back();
+		//!< ビデオモードを選択
+		int VCount;
+		auto VPtr = glfwGetVideoModes(Mon, &VCount);
+		const auto Vids = std::span(VPtr, VCount);
+		if (!std::empty(Vids)) {
+			//!< 解像度の高いビデオモードは最後に列挙されるようなので、最後の要素を選択 (Most high resolution vide mode will be in last element)
+			const auto Vid = Vids.back();
+			Width = Vid.width;
+			Height = Vid.height;
+		}
+	}
 
 	//!< ウインドウ作成 (Create window)
 #if defined(USE_PRIFULLSCREEN) || defined(USE_EXTFULLSCREEN)
 	//!< 明示的にモニタを指定した場合フルスクリーンになる (Explicitly select monitor to be fullscreen)
-	const auto GlfwWin = glfwCreateWindow(Vid.width, Vid.height, "Title", Mon, nullptr);
+	const auto GlfwWin = glfwCreateWindow(Width, Height, "Title", Mon, nullptr);
 #else
 	//!< フルスクリーンにしない場合は nullptr を指定すること (Select nullptr to be windowed)
-	const auto GlfwWin = glfwCreateWindow(Vid.width, Vid.height, "Title", nullptr, nullptr);
+	const auto GlfwWin = glfwCreateWindow(Width, Height, "Title", nullptr, nullptr);
 #endif
 	//!< コールバック登録 (Register callbacks) ウインドウ作成直後にやっておく
 	glfwSetErrorCallback(GlfwErrorCallback);
