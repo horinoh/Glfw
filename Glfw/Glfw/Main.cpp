@@ -55,6 +55,52 @@ protected:
 	int FBWidth, FBHeight;
 };
 
+class ClearGlfwVK : public VK, public Glfw
+{
+private:
+	using Super = VK;
+public:
+	ClearGlfwVK(GLFWwindow* Win) : Glfw(Win) {}
+
+	virtual void CreateInstance() override {
+		Super::CreateInstance(InstanceExtensions);
+	}
+	virtual void CreateSurface() override {
+		VERIFY_SUCCEEDED(glfwCreateWindowSurface(Instance, GlfwWindow, nullptr, &Surface));
+	}
+	virtual void CreateSwapchain() override {
+		Super::CreateSwapchain(static_cast<uint32_t>(FBWidth), static_cast<uint32_t>(FBHeight));
+	}
+	virtual void PopulatePrimaryCommandBuffer(const int i) override {
+		const auto CB = PrimaryCommandBuffers[0].second[i];
+
+		constexpr VkCommandBufferBeginInfo CBBI = {
+			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.pInheritanceInfo = nullptr
+		};
+		VERIFY_SUCCEEDED(vkBeginCommandBuffer(CB, &CBBI)); {
+			const auto RP = RenderPasses[0];
+			const auto FB = Framebuffers[i];
+
+			constexpr std::array CVs = { VkClearValue({.color = { 0.529411793f, 0.807843208f, 0.921568692f, 1.0f } }) };
+			const VkRenderPassBeginInfo RPBI = {
+				.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+				.pNext = nullptr,
+				.renderPass = RP,
+				.framebuffer = FB,
+				.renderArea = VkRect2D({.offset = VkOffset2D({.x = 0, .y = 0 }), .extent = Swapchain.Extent }),
+				.clearValueCount = static_cast<uint32_t>(size(CVs)), .pClearValues = data(CVs)
+			};
+			vkCmdBeginRenderPass(CB, &RPBI, VK_SUBPASS_CONTENTS_INLINE); {
+				vkCmdSetViewport(CB, 0, static_cast<uint32_t>(std::size(Viewports)), std::data(Viewports));
+				vkCmdSetScissor(CB, 0, static_cast<uint32_t>(std::size(ScissorRects)), std::data(ScissorRects));
+			} vkCmdEndRenderPass(CB);
+		} VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
+	}
+};
+
 class TriangleGlfwVK : public VK, public Glfw
 {
 private:
@@ -309,6 +355,7 @@ int main()
 		std::cout << "Framebuffer size = " << FBWidth << "x" << GBHeight << std::endl;
 	}
 
+	//ClearGlfwVK Vk(GlfwWin);
 	TriangleGlfwVK Vk(GlfwWin);
 	Vk.Init();
 
