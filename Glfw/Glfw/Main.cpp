@@ -13,9 +13,8 @@
 #pragma comment(lib, "glfw3dll.lib")
 #endif
 
-//#define USE_BORDERLESS
-//#define USE_PRIFULLSCREEN
-//#define USE_EXTFULLSCREEN
+//#define USE_BORDERLESS	//!< ボーダーレス
+//#define USE_EXTFULLSCREEN //!< 拡張モニタ、フルスクリーン
 
 #define USE_INDEX
 #define USE_SECONDARY_CB
@@ -307,13 +306,14 @@ int main()
 
 	auto Width = 800, Height = 600;
 	//!< モニタを選択
+	GLFWmonitor* Mon = nullptr;
 	if (!std::empty(Monitors)) {
 #ifdef USE_EXTFULLSCREEN
 		//!< 拡張モニタ (最後の要素) を選択 (Select ext monitor)
-		const auto Mon = Monitors.back();
+		Mon = Monitors.back();
 #else
 		//!< プライマリモニタ (デフォルト) を選択 (Select primary monitor (default))
-		const auto Mon = *std::ranges::find_if(Monitors, [&](const auto& i) { return i == glfwGetPrimaryMonitor(); });
+		Mon = *std::ranges::find_if(Monitors, [&](const auto& i) { return i == glfwGetPrimaryMonitor(); });
 #endif
 		//!< ビデオモードを選択
 		int VCount;
@@ -328,13 +328,9 @@ int main()
 	}
 
 	//!< ウインドウ作成 (Create window)
-#if defined(USE_PRIFULLSCREEN) || defined(USE_EXTFULLSCREEN)
 	//!< 明示的にモニタを指定した場合フルスクリーンになる (Explicitly select monitor to be fullscreen)
-	const auto GlfwWin = glfwCreateWindow(Width, Height, "Title", Mon, nullptr);
-#else
 	//!< フルスクリーンにしない場合は nullptr を指定すること (Select nullptr to be windowed)
-	const auto GlfwWin = glfwCreateWindow(Width, Height, "Title", nullptr, nullptr);
-#endif
+	const auto GlfwWin = glfwCreateWindow(Width, Height, "Title", Mon, nullptr);
 	//!< コールバック登録 (Register callbacks) ウインドウ作成直後にやっておく
 	glfwSetErrorCallback(GlfwErrorCallback);
 	glfwSetKeyCallback(GlfwWin, GlfwKeyCallback); 
