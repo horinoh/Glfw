@@ -36,8 +36,10 @@
 #endif
 #endif
 
+//!< yŽQlz
+//!< VK_ERROR_OUT_OF_DATE_KHR = -1000001004
 #ifdef _DEBUG
-#define VERIFY_SUCCEEDED(X) { const auto VR = (X); if(VK_SUCCESS != VR) { std::cerr << VR << std::endl; BREAKPOINT(); } }
+#define VERIFY_SUCCEEDED(X) { const auto VR = (X); if(VK_SUCCESS != VR) { std::cerr << "VkResult = " << VR << " (0x" << std::hex << static_cast<uint32_t>(VR) << std::dec << ")" << std::dec << std::endl; BREAKPOINT(); } }
 #else
 #define VERIFY_SUCCEEDED(X) (X) 
 #endif
@@ -93,28 +95,36 @@ public:
 		OnUpdate();
 		Submit();
 		Present();
+
+		++FrameCount;
 	}
 
-	virtual void CreateInstance() {}
+	virtual void CreateInstance() { std::cout << "VK::CreateInstance" << std::endl; }
 	virtual void SelectPhysicalDevice();
-	virtual void CreateSurface() {}
+	virtual void CreateSurface() { std::cout << "VK::CreateSurface" << std::endl; }
 	virtual void SelectSurfaceFormat();
 	virtual void CreateDevice();
 	virtual void CreateFence();
 	virtual void CreateSemaphore();
-	virtual void CreateSwapchain() {}
+	virtual void CreateSwapchain() { std::cout << "VK::CreateSwapchain" << std::endl; }
 	virtual void CreateCommandBuffer();
-	virtual void CreateGeometry() {}
-	virtual void CreateUniformBuffer() {}
-	virtual void CreateTexture() {}
+	virtual void CreateGeometry() { std::cout << "VK::CreateGeometry" << std::endl; }
+	virtual void CreateUniformBuffer() { std::cout << "VK::CreateUniformBuffer" << std::endl; }
+	virtual void CreateTexture() { std::cout << "VK::CreateTexture" << std::endl; }
 	virtual void CreatePipelineLayout();
-	virtual void CreateRenderPass() { CreateRenderPass_Clear(); }
-	virtual void CreatePipeline() {}
+	virtual void CreateRenderPass() { 
+		CreateRenderPass_Clear(); 
+		
+		std::cout << "VK::CreateRenderPass" << std::endl;
+	}
+	virtual void CreatePipeline() { std::cout << "VK::CreatePipeline" << std::endl; }
 	virtual void CreateFramebuffer() {
 		Framebuffers.reserve(std::size(Swapchain.ImageAndViews));
 		CreateFramebuffer(RenderPasses[0]);
+
+		std::cout << "VK::CreateFramebuffer" << std::endl;
 	}
-	virtual void CreateDescriptor() {}
+	virtual void CreateDescriptor() { std::cout << "VK::CreateDescriptor" << std::endl; }
 	virtual void CreateViewports();
 
 	virtual void PopulateCommandBuffer() {
@@ -122,11 +132,12 @@ public:
 			PopulateSecondaryCommandBuffer(i);
 			PopulatePrimaryCommandBuffer(i);
 		}
+		std::cout << "VK::PopulateCommandBuffer" << std::endl;
 	}
 
 	virtual void WaitFence();
 	virtual void AcquireNextImage();
-	virtual void OnUpdate() {}
+	virtual void OnUpdate() { if (0 == FrameCount) { std::cout << "VK::OnUpdate" << std::endl; } }
 	virtual void Submit();
 	virtual void Present();
 
@@ -532,4 +543,6 @@ protected:
 
 	std::vector<VkViewport> Viewports;
 	std::vector<VkRect2D> ScissorRects;
+
+	uint32_t FrameCount = 0;
 };

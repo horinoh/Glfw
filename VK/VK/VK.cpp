@@ -312,6 +312,8 @@ void VK::CreateDevice()
 	//!< デバイス作成後に、キューファミリインデックスとファミリ内でのインデックスから、キューを取得 (After create device, get queue from family index, index in family)
 	vkGetDeviceQueue(Device, GraphicsQueue.second, GraphicsIndexInFamily, &GraphicsQueue.first);
 	vkGetDeviceQueue(Device, PresentQueue.second, PresentIndexInFamily, &PresentQueue.first);
+
+	std::cout << "VK::CreateDevice" << std::endl;
 }
 
 void VK::CreateFence()
@@ -323,6 +325,8 @@ void VK::CreateFence()
 		.flags = VK_FENCE_CREATE_SIGNALED_BIT
 	};
 	VERIFY_SUCCEEDED(vkCreateFence(Device, &FCI, nullptr, &Fence));
+
+	std::cout << "VK::CreateFence" << std::endl;
 }
 
 void VK::CreateSemaphore()
@@ -340,12 +344,16 @@ void VK::CreateSemaphore()
 	};
 	VERIFY_SUCCEEDED(vkCreateSemaphore(Device, &SCI, nullptr, &NextImageAcquiredSemaphore));
 	VERIFY_SUCCEEDED(vkCreateSemaphore(Device, &SCI, nullptr, &RenderFinishedSemaphore));
+
+	std::cout << "VK::CreateSemaphore" << std::endl;
 }
 
 void VK::CreateCommandBuffer()
 {
 	AllocateCommandBuffers(CreateCommandPool(PrimaryCommandBuffers), std::size(Swapchain.ImageAndViews), VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 	AllocateCommandBuffers(CreateCommandPool(SecondaryCommandBuffers), std::size(Swapchain.ImageAndViews), VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+
+	std::cout << "VK::CreateCommandBuffer" << std::endl;
 }
 
 void VK::CreatePipelineLayout()
@@ -360,6 +368,8 @@ void VK::CreatePipelineLayout()
 		.pushConstantRangeCount = static_cast<uint32_t>(std::size(PCRs)), .pPushConstantRanges = std::data(PCRs)
 	};
 	VERIFY_SUCCEEDED(vkCreatePipelineLayout(Device, &PLCI, nullptr, &PipelineLayouts.emplace_back()));
+	
+	std::cout << "VK::CreatePipelineLayout" << std::endl;
 }
 
 VkShaderModule VK::CreateShaderModule(const std::filesystem::path& Path)
@@ -395,6 +405,8 @@ void VK::CreateViewports()
 			.minDepth = 0.0f, .maxDepth = 1.0f
 			}));
 	ScissorRects.emplace_back(VkRect2D({ .offset = VkOffset2D({.x = 0, .y = 0 }), .extent = VkExtent2D({.width = Swapchain.Extent.width, .height = Swapchain.Extent.height }) }));
+
+	std::cout << "VK::CreateViewports" << std::endl;
 }
 
 VK::CommandPoolAndBuffers& VK::CreateCommandPool(std::vector<VK::CommandPoolAndBuffers>& CPAB)
@@ -424,6 +436,8 @@ void VK::WaitFence()
 	const std::array Fences = { Fence };
 	VERIFY_SUCCEEDED(vkWaitForFences(Device, static_cast<uint32_t>(std::size(Fences)), std::data(Fences), VK_TRUE, (std::numeric_limits<uint64_t>::max)()));
 	vkResetFences(Device, static_cast<uint32_t>(std::size(Fences)), std::data(Fences));
+
+	if (0 == FrameCount) { std::cout << "VK::WaitFence" << std::endl; }
 }
 
 void VK::AcquireNextImage() 
@@ -476,6 +490,8 @@ void VK::Submit()
 		})
 	};
 	VERIFY_SUCCEEDED(vkQueueSubmit2(GraphicsQueue.first, static_cast<uint32_t>(std::size(SIs)), std::data(SIs), Fence));
+
+	if (0 == FrameCount) { std::cout << "VK::Submit" << std::endl; }
 }
 void VK::Present()
 {
@@ -491,6 +507,8 @@ void VK::Present()
 		.pResults = nullptr
 	};
 	VERIFY_SUCCEEDED(vkQueuePresentKHR(PresentQueue.first, &PI));
+
+	if (0 == FrameCount) { std::cout << "VK::Present" << std::endl; }
 }
 
 void VK::CreateInstance(const std::vector<const char*>& Extensions)
