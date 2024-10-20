@@ -62,12 +62,15 @@ public:
 
 	virtual void CreateInstance() override {
 		Super::CreateInstance(InstanceExtensions);
+		LOG();
 	}
 	virtual void CreateSurface() override {
 		VERIFY_SUCCEEDED(glfwCreateWindowSurface(Instance, GlfwWindow, nullptr, &Surface));
+		LOG();
 	}
 	virtual void CreateSwapchain() override {
 		Super::CreateSwapchain(static_cast<const uint32_t>(FBWidth), static_cast<const uint32_t>(FBHeight));
+		LOG();
 	}
 };
 
@@ -159,6 +162,7 @@ int main()
 	Vk.Init();
 
 	Vk.PopulateCommandBuffer();
+	Vk.OnUpdate();
 
 	//!< ƒ‹[ƒv (Loop)
 	while (!glfwWindowShouldClose(GlfwWin)) {

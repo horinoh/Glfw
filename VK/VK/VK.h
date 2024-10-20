@@ -8,6 +8,8 @@
 #include <numbers>
 #include <span>
 #include <thread>
+#include <source_location>
+#include <random>
 
 #include <vulkan/vulkan.h>
 
@@ -40,12 +42,15 @@
 //!< VK_ERROR_OUT_OF_DATE_KHR = -1000001004
 #ifdef _DEBUG
 #define VERIFY_SUCCEEDED(X) { const auto VR = (X); if(VK_SUCCESS != VR) { std::cerr << "VkResult = " << VR << " (0x" << std::hex << static_cast<uint32_t>(VR) << std::dec << ")" << std::dec << std::endl; BREAKPOINT(); } }
+#define LOG() std::cout << std::source_location::current().function_name() << std::endl
 #else
 #define VERIFY_SUCCEEDED(X) (X) 
+#define LOG()
 #endif
 
 #define SIZE_DATA(X) VK::SizeAndDataPtr({ sizeof(X), std::data(X) })
 #define SIZE_DATA_NULL VK::SizeAndDataPtr({ 0, nullptr })
+
 
 class VK
 {
@@ -58,10 +63,15 @@ public:
 	};
 	using PhysicalDeviceAndProps = std::pair<VkPhysicalDevice, PhysDevProp>;
 	using QueueAndFamilyIndex = std::pair<VkQueue, uint32_t>;
-	using BufferAndDeviceMemory = std::pair<VkBuffer, VkDeviceMemory>; // add VkMemoryRequirements;
+	using BufferAndDeviceMemory = std::pair<VkBuffer, VkDeviceMemory>;
 	using ImageAndView = std::pair<VkImage, VkImageView>;
-	using ImageAndDeviceMemory = std::pair<ImageAndView, VkDeviceMemory>;
+	struct Texture {
+		ImageAndView ImageView;
+		VkDeviceMemory DeviceMemory;
+		std::vector<BufferAndDeviceMemory> Staging;
+	};
 	using CommandPoolAndBuffers = std::pair<VkCommandPool, std::vector<VkCommandBuffer>>;
+	using PathAndPipelineStage = std::pair<std::filesystem::path, VkPipelineStageFlags2>;
 
 	virtual ~VK();
 
@@ -99,32 +109,30 @@ public:
 		++FrameCount;
 	}
 
-	virtual void CreateInstance() { std::cout << "VK::CreateInstance" << std::endl; }
+	virtual void CreateInstance() { LOG(); }
 	virtual void SelectPhysicalDevice();
-	virtual void CreateSurface() { std::cout << "VK::CreateSurface" << std::endl; }
+	virtual void CreateSurface() { LOG(); }
 	virtual void SelectSurfaceFormat();
 	virtual void CreateDevice();
 	virtual void CreateFence();
 	virtual void CreateSemaphore();
-	virtual void CreateSwapchain() { std::cout << "VK::CreateSwapchain" << std::endl; }
+	virtual void CreateSwapchain() { LOG(); }
 	virtual void CreateCommandBuffer();
-	virtual void CreateGeometry() { std::cout << "VK::CreateGeometry" << std::endl; }
-	virtual void CreateUniformBuffer() { std::cout << "VK::CreateUniformBuffer" << std::endl; }
-	virtual void CreateTexture() { std::cout << "VK::CreateTexture" << std::endl; }
+	virtual void CreateGeometry() { LOG(); }
+	virtual void CreateUniformBuffer() { LOG(); }
+	virtual void CreateTexture() { LOG(); }
 	virtual void CreatePipelineLayout();
 	virtual void CreateRenderPass() { 
-		CreateRenderPass_Clear(); 
-		
-		std::cout << "VK::CreateRenderPass" << std::endl;
+		CreateRenderPass_Clear(); 	
+		LOG();
 	}
-	virtual void CreatePipeline() { std::cout << "VK::CreatePipeline" << std::endl; }
+	virtual void CreatePipeline() { LOG(); }
 	virtual void CreateFramebuffer() {
 		Framebuffers.reserve(std::size(Swapchain.ImageAndViews));
 		CreateFramebuffer(RenderPasses[0]);
-
-		std::cout << "VK::CreateFramebuffer" << std::endl;
+		LOG();
 	}
-	virtual void CreateDescriptor() { std::cout << "VK::CreateDescriptor" << std::endl; }
+	virtual void CreateDescriptor() { LOG(); }
 	virtual void CreateViewports();
 
 	virtual void PopulateCommandBuffer() {
@@ -132,12 +140,12 @@ public:
 			PopulateSecondaryCommandBuffer(i);
 			PopulatePrimaryCommandBuffer(i);
 		}
-		std::cout << "VK::PopulateCommandBuffer" << std::endl;
+		LOG();
 	}
 
 	virtual void WaitFence();
 	virtual void AcquireNextImage();
-	virtual void OnUpdate() { if (0 == FrameCount) { std::cout << "VK::OnUpdate" << std::endl; } }
+	virtual void OnUpdate() { if (0 == FrameCount) { LOG(); } }
 	virtual void Submit();
 	virtual void Present();
 
@@ -195,10 +203,29 @@ public:
 	void PopulateCopyCommand(const VkCommandBuffer CB, const BufferAndDeviceMemory& Staging, const BufferAndDeviceMemory& Buffer, const SizeAndDataPtr& Size, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const {
 		PopulateCopyCommand(CB, Staging, Buffer, Size.first, AF, PSF);
 	}
-	void PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkImage Image, const std::span<VkBufferImageCopy2>& BICs, const VkImageSubresourceRange& ISR, const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const;
+
+	void PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkImage Image, const std::span<const VkBufferImageCopy2>& BICs, const VkImageSubresourceRange& ISR, const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const;
 	void PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkImage Image, const gli::texture& Gli, const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const;
-	void PopulateCopyCommand(const VkCommandBuffer CB, const BufferAndDeviceMemory& Staging, const ImageAndDeviceMemory& Image, const gli::texture& Gli, const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const {
-		PopulateCopyCommand(CB, Staging.first, Image.first.first, Gli, IL, AF, PSF);
+	void PopulateCopyCommand(const VkCommandBuffer CB, const BufferAndDeviceMemory& Staging, const Texture& Image, const gli::texture& Gli, const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const {
+		PopulateCopyCommand(CB, Staging.first, Image.ImageView.first, Gli, IL, AF, PSF);
+	}
+	void PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkImage Image, const uint32_t Width, const uint32_t Height, const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const
+	{
+		const std::array BICs = {
+			VkBufferImageCopy2({
+				.sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2,
+				.pNext = nullptr,
+				.bufferOffset = 0, .bufferRowLength = 0, .bufferImageHeight = 0,
+				.imageSubresource = VkImageSubresourceLayers({.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1 }),
+				.imageOffset = VkOffset3D({.x = 0, .y = 0, .z = 0 }),
+				.imageExtent = VkExtent3D({.width = Width, .height = Height, .depth = 1 }) }),
+		};
+		constexpr auto ISR = VkImageSubresourceRange({
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.baseMipLevel = 0, .levelCount = VK_REMAINING_MIP_LEVELS,
+			.baseArrayLayer = 0, .layerCount = VK_REMAINING_ARRAY_LAYERS
+		});
+		PopulateCopyCommand(CB, Staging, Image, BICs, ISR, IL, AF, PSF);
 	}
 
 	CommandPoolAndBuffers& CreateCommandPool(std::vector<CommandPoolAndBuffers>& CPABs, const VkCommandPoolCreateInfo& CPCI) {
@@ -273,12 +300,12 @@ public:
 			});
 	}
 
-	void CreateTexture(const VkFormat Format, const uint32_t Width, const uint32_t Height, const VkImageUsageFlags IUF = VK_IMAGE_USAGE_SAMPLED_BIT, const VkImageAspectFlags IAF = VK_IMAGE_ASPECT_COLOR_BIT);
-	void CreateTexture_Depth(const VkFormat Format, const uint32_t Width, const uint32_t Height) {
-		CreateTexture(Format, Width, Height, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT);
+	Texture& CreateTexture(const VkFormat Format, const uint32_t Width, const uint32_t Height, const VkImageUsageFlags IUF = VK_IMAGE_USAGE_SAMPLED_BIT, const VkImageAspectFlags IAF = VK_IMAGE_ASPECT_COLOR_BIT);
+	Texture& CreateTexture_Depth(const VkFormat Format, const uint32_t Width, const uint32_t Height) {
+		return CreateTexture(Format, Width, Height, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT);
 	}
-	void CreateTexture_Render(const VkFormat Format, const uint32_t Width, const uint32_t Height) {
-		CreateTexture(Format, Width, Height, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+	Texture& CreateTexture_Render(const VkFormat Format, const uint32_t Width, const uint32_t Height) {
+		return CreateTexture(Format, Width, Height, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
 	}
 
 	[[nodiscard]] static VkFormat ToVkFormat(const gli::format GLIFormat);
@@ -286,7 +313,8 @@ public:
 	[[nodiscard]] static VkImageViewType ToVkImageViewType(const gli::target GLITarget);
 	[[nodiscard]] static VkComponentSwizzle ToVkComponentSwizzle(const gli::swizzle GLISwizzle);
 	[[nodiscard]] static VkComponentMapping ToVkComponentMapping(const gli::texture::swizzles_type GLISwizzleType);
-	void CreateGLITexture(const std::filesystem::path& Path, gli::texture& Gli);
+	Texture& CreateGLITexture(const std::filesystem::path& Path, gli::texture& Gli);
+	void CreateGLITextures(const VkCommandBuffer CB, const std::vector<PathAndPipelineStage>& Paths);
 
 	VkShaderModule CreateShaderModule(const std::filesystem::path& Path);
 
@@ -526,7 +554,7 @@ protected:
 
 	std::vector<BufferAndDeviceMemory> UniformBuffers;
 
-	std::vector<ImageAndDeviceMemory> Textures;
+	std::vector<Texture> Textures;
 
 	std::vector<VkSampler> Samplers;
 	std::vector<VkDescriptorSetLayout> DescriptorSetLayouts;

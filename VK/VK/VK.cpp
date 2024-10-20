@@ -38,9 +38,13 @@ VK::~VK()
 		vkDestroySampler(Device, i, nullptr);
 	}
 	for (auto i : Textures) {
-		vkFreeMemory(Device, i.second, nullptr);
-		vkDestroyImageView(Device, i.first.second, nullptr);
-		vkDestroyImage(Device, i.first.first, nullptr);
+		for (auto j : i.Staging) {
+			vkFreeMemory(Device, j.second, nullptr);
+			vkDestroyBuffer(Device, j.first, nullptr);
+		}
+		vkFreeMemory(Device, i.DeviceMemory, nullptr);
+		vkDestroyImageView(Device, i.ImageView.second, nullptr);
+		vkDestroyImage(Device, i.ImageView.first, nullptr);
 	}
 	for (auto i : UniformBuffers) {
 		vkFreeMemory(Device, i.second, nullptr);
@@ -313,7 +317,7 @@ void VK::CreateDevice()
 	vkGetDeviceQueue(Device, GraphicsQueue.second, GraphicsIndexInFamily, &GraphicsQueue.first);
 	vkGetDeviceQueue(Device, PresentQueue.second, PresentIndexInFamily, &PresentQueue.first);
 
-	std::cout << "VK::CreateDevice" << std::endl;
+	LOG();
 }
 
 void VK::CreateFence()
@@ -326,7 +330,7 @@ void VK::CreateFence()
 	};
 	VERIFY_SUCCEEDED(vkCreateFence(Device, &FCI, nullptr, &Fence));
 
-	std::cout << "VK::CreateFence" << std::endl;
+	LOG();
 }
 
 void VK::CreateSemaphore()
@@ -345,7 +349,7 @@ void VK::CreateSemaphore()
 	VERIFY_SUCCEEDED(vkCreateSemaphore(Device, &SCI, nullptr, &NextImageAcquiredSemaphore));
 	VERIFY_SUCCEEDED(vkCreateSemaphore(Device, &SCI, nullptr, &RenderFinishedSemaphore));
 
-	std::cout << "VK::CreateSemaphore" << std::endl;
+	LOG();
 }
 
 void VK::CreateCommandBuffer()
@@ -353,7 +357,7 @@ void VK::CreateCommandBuffer()
 	AllocateCommandBuffers(CreateCommandPool(PrimaryCommandBuffers), std::size(Swapchain.ImageAndViews), VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 	AllocateCommandBuffers(CreateCommandPool(SecondaryCommandBuffers), std::size(Swapchain.ImageAndViews), VK_COMMAND_BUFFER_LEVEL_SECONDARY);
 
-	std::cout << "VK::CreateCommandBuffer" << std::endl;
+	LOG();
 }
 
 void VK::CreatePipelineLayout()
@@ -369,7 +373,7 @@ void VK::CreatePipelineLayout()
 	};
 	VERIFY_SUCCEEDED(vkCreatePipelineLayout(Device, &PLCI, nullptr, &PipelineLayouts.emplace_back()));
 	
-	std::cout << "VK::CreatePipelineLayout" << std::endl;
+	LOG();
 }
 
 VkShaderModule VK::CreateShaderModule(const std::filesystem::path& Path)
@@ -406,7 +410,7 @@ void VK::CreateViewports()
 			}));
 	ScissorRects.emplace_back(VkRect2D({ .offset = VkOffset2D({.x = 0, .y = 0 }), .extent = VkExtent2D({.width = Swapchain.Extent.width, .height = Swapchain.Extent.height }) }));
 
-	std::cout << "VK::CreateViewports" << std::endl;
+	LOG();
 }
 
 VK::CommandPoolAndBuffers& VK::CreateCommandPool(std::vector<VK::CommandPoolAndBuffers>& CPAB)
@@ -437,7 +441,7 @@ void VK::WaitFence()
 	VERIFY_SUCCEEDED(vkWaitForFences(Device, static_cast<uint32_t>(std::size(Fences)), std::data(Fences), VK_TRUE, (std::numeric_limits<uint64_t>::max)()));
 	vkResetFences(Device, static_cast<uint32_t>(std::size(Fences)), std::data(Fences));
 
-	if (0 == FrameCount) { std::cout << "VK::WaitFence" << std::endl; }
+	if (0 == FrameCount) { LOG(); }
 }
 
 void VK::AcquireNextImage() 
@@ -491,7 +495,7 @@ void VK::Submit()
 	};
 	VERIFY_SUCCEEDED(vkQueueSubmit2(GraphicsQueue.first, static_cast<uint32_t>(std::size(SIs)), std::data(SIs), Fence));
 
-	if (0 == FrameCount) { std::cout << "VK::Submit" << std::endl; }
+	if (0 == FrameCount) { LOG(); }
 }
 void VK::Present()
 {
@@ -508,7 +512,7 @@ void VK::Present()
 	};
 	VERIFY_SUCCEEDED(vkQueuePresentKHR(PresentQueue.first, &PI));
 
-	if (0 == FrameCount) { std::cout << "VK::Present" << std::endl; }
+	if (0 == FrameCount) { LOG(); }
 }
 
 void VK::CreateInstance(const std::vector<const char*>& Extensions)
@@ -818,7 +822,7 @@ void VK::PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, c
 		VK_PIPELINE_STAGE_2_TRANSFER_BIT, PSF,
 		VK_ACCESS_2_MEMORY_WRITE_BIT, AF);
 }
-void VK::PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkImage Image, const std::span<VkBufferImageCopy2>& BICs, const VkImageSubresourceRange& ISR, const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const
+void VK::PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkImage Image, const std::span<const VkBufferImageCopy2>& BICs, const VkImageSubresourceRange& ISR, const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const
 {
 	ImageMemoryBarrier(CB,
 		Image,
@@ -969,12 +973,12 @@ void VK::CreateGeometry(const std::vector<VK::GeometryCreateInfo>& GCIs)
 	}
 }
 
-void VK::CreateTexture(const VkFormat Format, const uint32_t Width, const uint32_t Height, const VkImageUsageFlags IUF, const VkImageAspectFlags IAF) 
+VK::Texture& VK::CreateTexture(const VkFormat Format, const uint32_t Width, const uint32_t Height, const VkImageUsageFlags IUF, const VkImageAspectFlags IAF)
 {
 	auto& Tex = Textures.emplace_back();
-	auto& Image = Tex.first.first;
-	auto& ImageView = Tex.first.second;
-	auto& DeviceMemory = Tex.second;
+	auto& Image = Tex.ImageView.first;
+	auto& ImageView = Tex.ImageView.second;
+	auto& DeviceMemory = Tex.DeviceMemory;
 
 	constexpr std::array<uint32_t, 0> QFIs = {};
 	const VkImageCreateInfo ICI = {
@@ -1016,6 +1020,8 @@ void VK::CreateTexture(const VkFormat Format, const uint32_t Width, const uint32
 		})
 	};
 	CreateImageView(&ImageView, IVCI);
+
+	return Tex;
 }
 
 VkFormat VK::ToVkFormat(const gli::format GLIFormat) 
@@ -1086,12 +1092,12 @@ VkComponentMapping VK::ToVkComponentMapping(const gli::texture::swizzles_type GL
 		.b = ToVkComponentSwizzle(GLISwizzleType.b),
 		.a = ToVkComponentSwizzle(GLISwizzleType.a) });
 }
-void VK::CreateGLITexture(const std::filesystem::path & Path, gli::texture& Gli)
+VK::Texture& VK::CreateGLITexture(const std::filesystem::path & Path, gli::texture& Gli)
 {
 	auto& Tex = Textures.emplace_back();
-	auto& Image = Tex.first.first;
-	auto& ImageView = Tex.first.second;
-	auto& DeviceMemory = Tex.second;
+	auto& Image = Tex.ImageView.first;
+	auto& ImageView = Tex.ImageView.second;
+	auto& DeviceMemory = Tex.DeviceMemory;
 
 	Gli = gli::load(std::data(Path.string()));
 	constexpr std::array<uint32_t, 0> QFIs = {};
@@ -1132,6 +1138,37 @@ void VK::CreateGLITexture(const std::filesystem::path & Path, gli::texture& Gli)
 		})
 	};
 	CreateImageView(&ImageView, IVCI);
+
+	return Tex;
+}
+void VK::CreateGLITextures(const VkCommandBuffer CB, const std::vector<PathAndPipelineStage>& Paths)
+{
+	std::vector<gli::texture> Glis;
+	std::vector<Texture> Texs;
+	std::vector<BufferAndDeviceMemory> Stgs;
+	for (auto& i : Paths) {
+		Texs.emplace_back(CreateGLITexture(i.first, Glis.emplace_back()));
+		CreateHostVisibleBuffer(Stgs.emplace_back(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, Glis.back());
+	}
+	constexpr VkCommandBufferBeginInfo CBBI = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		.pNext = nullptr,
+		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+		.pInheritanceInfo = nullptr
+	};
+	VERIFY_SUCCEEDED(vkBeginCommandBuffer(CB, &CBBI)); {
+		for (auto Index = 0; auto & i : Paths) {
+			PopulateCopyCommand(CB, Stgs[Index], Texs[Index], Glis[Index], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_2_SHADER_READ_BIT, i.second);
+			++Index;
+		}
+	} VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
+
+	SubmitAndWait(CB);
+
+	for (auto i : Stgs) {
+		vkFreeMemory(Device, i.second, nullptr);
+		vkDestroyBuffer(Device, i.first, nullptr);
+	}
 }
 
 void VK::CreateRenderPass(const VkAttachmentLoadOp ALO, const VkAttachmentStoreOp ASO,

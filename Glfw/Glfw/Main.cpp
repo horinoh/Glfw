@@ -63,12 +63,15 @@ public:
 
 	virtual void CreateInstance() override {
 		Super::CreateInstance(InstanceExtensions);
+		LOG();
 	}
 	virtual void CreateSurface() override {
 		VERIFY_SUCCEEDED(glfwCreateWindowSurface(Instance, GlfwWindow, nullptr, &Surface));
+		LOG();
 	}
 	virtual void CreateSwapchain() override {
 		Super::CreateSwapchain(static_cast<uint32_t>(FBWidth), static_cast<uint32_t>(FBHeight));
+		LOG();
 	}
 	virtual void PopulatePrimaryCommandBuffer(const int i) override {
 		const auto CB = PrimaryCommandBuffers[0].second[i];
@@ -97,6 +100,7 @@ public:
 				vkCmdSetScissor(CB, 0, static_cast<uint32_t>(std::size(ScissorRects)), std::data(ScissorRects));
 			} vkCmdEndRenderPass(CB);
 		} VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
+		LOG();
 	}
 };
 
@@ -109,12 +113,15 @@ public:
 
 	virtual void CreateInstance() override {
 		Super::CreateInstance(InstanceExtensions);
+		LOG();
 	}
 	virtual void CreateSurface() override {
 		VERIFY_SUCCEEDED(glfwCreateWindowSurface(Instance, GlfwWindow, nullptr, &Surface));
+		LOG();
 	}
 	virtual void CreateSwapchain() override {
 		Super::CreateSwapchain(static_cast<uint32_t>(FBWidth), static_cast<uint32_t>(FBHeight));
+		LOG();
 	}
 
 	virtual void CreateGeometry() override {
@@ -134,6 +141,7 @@ public:
 #else
 		VK::CreateGeometry(SIZE_DATA(Vertices), std::size(Vertices), 1);
 #endif
+		LOG();
 	}
 	virtual void CreatePipeline() override {
 		Pipelines.emplace_back();
@@ -166,6 +174,7 @@ public:
 		for (const auto i : SMs) {
 			vkDestroyShaderModule(Device, i, nullptr);
 		}
+		LOG();
 	}
 #ifdef USE_SECONDARY_CB
 	virtual void PopulateSecondaryCommandBuffer(const int i) override {
@@ -356,6 +365,7 @@ int main()
 	Vk.Init();
 
 	Vk.PopulateCommandBuffer();
+	Vk.OnUpdate();
 
 	//!< ƒ‹[ƒv (Loop)
 	while (!glfwWindowShouldClose(GlfwWin)) {

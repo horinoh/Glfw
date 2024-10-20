@@ -3,7 +3,7 @@
 //#define DISPLAY_QUILT
 #ifdef DISPLAY_QUILT
 //!< キルトを自前でレンダリングしている場合、最左右のみを表示する [Display most left, right quilt, only in case self rendering quilt]
-//#define DISPLAY_MOST_LR_QUILT
+#define DISPLAY_MOST_LR_QUILT
 #endif
 
 #define TO_RADIAN(x) ((x) * std::numbers::pi_v<float> / 180.0f)
@@ -108,20 +108,15 @@ protected:
 		WorldBuffer = glm::scale(glm::mat4(1.0f), glm::vec3(X, Y, 1.0f));
 	}
 
-	virtual VkBuffer GetViewProjectionBuffer() = 0;
-	virtual VkBuffer GetLenticularBuffer() = 0;
-	virtual VkBuffer GetWorldBuffer() = 0;
+	virtual BufferAndDeviceMemory& GetViewProjectionBuffer() = 0;
+	virtual BufferAndDeviceMemory& GetLenticularBuffer() = 0;
+	virtual BufferAndDeviceMemory& GetWorldBuffer() = 0;
 
-	virtual VkDeviceMemory GetViewProjectionMemory() = 0;
-	virtual VkDeviceMemory GetLenticularMemory() = 0;
-	virtual VkDeviceMemory GetWorldMemory() = 0;
+	virtual Texture& GetRTColor() = 0;
+	virtual Texture& GetRTDepth() = 0;
 
-	virtual VkImageView GetColorRTV() = 0;
-	virtual VkImage GetColorRT() = 0;
-	virtual VkImageView GetDepthRTV() = 0;
-
-	virtual VkImageView GetColorMap() = 0;
-	virtual VkImageView GetDisplacementMap() = 0;
+	virtual Texture& GetColorMap() = 0;
+	virtual Texture& GetDisplacementMap() = 0;
 
 protected:
 	int QuiltX = 3360, QuiltY = 3360;
@@ -172,11 +167,7 @@ public:
 	
 		//!< [Pass1] レンチキュラー、ワールドバッファ
 		CreateHostVisibleBuffer(UniformBuffers.emplace_back(), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sizeof(LenticularBuffer), &LenticularBuffer);
-		CreateHostVisibleBuffer(UniformBuffers.emplace_back(), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sizeof(WorldBuffer), &WorldBuffer);
-	
-		UpdateViewProjectionBuffer();
-		UpdateLenticularBuffer();
-		UpdateWorldBuffer();
+		CreateHostVisibleBuffer(UniformBuffers.emplace_back(), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sizeof(WorldBuffer), &WorldBuffer);	
 	}
 	
 	virtual void CreateTexture() override {
@@ -186,35 +177,16 @@ public:
 
 		//!< テクスチャマップ、ディスプレースメントマップ読み込み [2, 3]
 		const auto BasePath = std::filesystem::path("..") / ".." / "Textures";
-		std::vector<gli::texture> GliTextures;
-		CreateGLITexture(BasePath / "Rocks007_2K_Color.dds", GliTextures.emplace_back());
-		CreateGLITexture(BasePath / "Rocks007_2K_Displacement.dds", GliTextures.emplace_back());
-		{
-			//!< ステージングバッファの作成、ステージングバッファへのコピー
-			std::vector<BufferAndDeviceMemory> StagingBuffers;
-			CreateHostVisibleBuffer(StagingBuffers.emplace_back(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, GliTextures[0]);
-			CreateHostVisibleBuffer(StagingBuffers.emplace_back(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, GliTextures[1]);
-			
-			//!< コピーコマンド発行
-			const auto& CB = PrimaryCommandBuffers[0].second[0];
-			constexpr VkCommandBufferBeginInfo CBBI = {
-				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-				.pNext = nullptr,
-				.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-				.pInheritanceInfo = nullptr
-			};
-			VERIFY_SUCCEEDED(vkBeginCommandBuffer(CB, &CBBI)); {
-				PopulateCopyCommand(CB, StagingBuffers[0], Textures[2], GliTextures[0], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_2_SHADER_READ_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
-				PopulateCopyCommand(CB, StagingBuffers[1], Textures[3], GliTextures[1], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_2_SHADER_READ_BIT, VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT);
-			} VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
+		const std::vector Paths = {
+			PathAndPipelineStage({ BasePath / "Rocks007_2K_Color.dds", VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT }),
+			PathAndPipelineStage({ BasePath / "Rocks007_2K_Displacement.dds", VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT }),
+		};
+		CreateGLITextures(PrimaryCommandBuffers[0].second[0], Paths);
 
-			SubmitAndWait(CB);
-
-			for (auto i : StagingBuffers) {
-				vkFreeMemory(Device, i.second, nullptr);
-				vkDestroyBuffer(Device, i.first, nullptr);
-			}
-		}
+		//!< アニメーションテクスチャマップ [4]
+		constexpr uint32_t Width = 320, Height = 240;
+		VK::CreateTexture(VK_FORMAT_B8G8R8A8_UNORM, Width, Height);
+		CreateHostVisibleBuffer(Textures.back().Staging.emplace_back(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(uint32_t) * Width * Height, nullptr);		
 	}
 	void CreateCommandBuffer() override {
 		//!< プライマリ
@@ -317,10 +289,10 @@ public:
 		//!< [Pass0] オフスクリーン (テッセレーション、マルチビュー)
 		{
 			const auto RP = RenderPasses[0];
-			const auto CRTV = GetColorRTV();
-			const auto DRTV = GetDepthRTV();
+			const auto RTCV = GetRTColor().ImageView.second;
+			const auto RTDV = GetRTDepth().ImageView.second;
 
-			const std::array IVs = { CRTV, DRTV };
+			const std::array IVs = { RTCV, RTDV };
 			const VkFramebufferCreateInfo FCI = {
 				.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
 				.pNext = nullptr,
@@ -353,10 +325,10 @@ public:
 		{
 			const auto DynamicOffset = GetMaxViewports() * sizeof(ViewProjectionBuffer[0]);
 
-			const auto UB_0 = GetViewProjectionBuffer();
-			const auto IV_0 = GetColorMap();
-			const auto IV_1 = GetDisplacementMap();
-			const auto UB_2 = GetWorldBuffer();
+			const auto UB_0 = GetViewProjectionBuffer().first;
+			const auto IV_0 = GetColorMap().ImageView.second;
+			const auto IV_1 = GetDisplacementMap().ImageView.second;
+			const auto UB_2 = GetWorldBuffer().first;
 
 			const auto DS = DescriptorSets[0];
 
@@ -412,8 +384,8 @@ public:
 				}),
 			{ DSL });
 		{			
-			const auto IV = GetColorRTV();
-			const auto UB = GetLenticularBuffer();
+			const auto IV = GetRTColor().ImageView.second;
+			const auto UB = GetLenticularBuffer().first;
 
 			const auto DS = DescriptorSets[1];
 
@@ -477,7 +449,7 @@ public:
 			const VkBufferMemoryRequirementsInfo2 BMRI = {
 				.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2,
 				.pNext = nullptr,
-				.buffer = GetViewProjectionBuffer(),
+				.buffer = GetViewProjectionBuffer().first,
 			};
 			VkMemoryRequirements2 MR = {
 				.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
@@ -603,12 +575,16 @@ public:
 			.pInheritanceInfo = nullptr
 		};
 		VERIFY_SUCCEEDED(vkBeginCommandBuffer(CB, &CBBI)); {
+			//!< (ステージングから) テクスチャ更新コマンド
+			constexpr uint32_t Width = 320, Height = 240;
+			PopulateCopyCommand(CB, Textures[4].Staging.back().first, Textures[4].ImageView.first, Width, Height, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_2_SHADER_READ_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
+
 			//!<【Pass0】オフスクリーン (テッセレーション、マルチビュー)
 			PopulatePrimaryCommandBuffer_Pass0(i);
 
 			//!< バリア
 			ImageMemoryBarrier(CB,
-				GetColorRT(),
+				GetRTColor().ImageView.first,
 				VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
 				VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_2_SHADER_READ_BIT,
 				VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -619,19 +595,31 @@ public:
 		} VERIFY_SUCCEEDED(vkEndCommandBuffer(CB));
 	}
 
+	virtual void OnUpdate() override {
+		Super::OnUpdate();
+
+		Swapchain.Index;
+
+		Super::UpdateViewProjectionBuffer();
+		Super::UpdateWorldBuffer();
+
+		CopyToHostVisibleMemory(GetViewProjectionBuffer().second, 0, sizeof(ViewProjectionBuffer), &ViewProjectionBuffer);
+		CopyToHostVisibleMemory(GetLenticularBuffer().second, 0, sizeof(LenticularBuffer), &LenticularBuffer);
+		CopyToHostVisibleMemory(GetWorldBuffer().second, 0, sizeof(WorldBuffer), &WorldBuffer);
+
+		//!< (テクスチャの) ステージングを更新
+		constexpr uint32_t Width = 320, Height = 240;
+		std::array<uint32_t, Width * Height> Pattern;
+		std::random_device RndDev;
+		std::ranges::generate(Pattern, [&]() { return RndDev(); });
+		CopyToHostVisibleMemory(Textures[4].Staging.back().second, 0, sizeof(Pattern), std::data(Pattern));
+	}
+
 protected:
 	virtual float GetDisplayAspect() const override { return LenticularBuffer.DisplayAspect; }
 	virtual int GetTileX() const override { return LenticularBuffer.TileX; }
 	virtual int GetTileY() const override { return LenticularBuffer.TileY; }
 
-	virtual void UpdateViewProjectionBuffer() override {
-		Super::UpdateViewProjectionBuffer();
-
-		CopyToHostVisibleMemory(GetViewProjectionMemory(), 0, sizeof(ViewProjectionBuffer), &ViewProjectionBuffer);
-	}
-	virtual void UpdateLenticularBuffer() {
-		CopyToHostVisibleMemory(GetLenticularMemory(), 0, sizeof(LenticularBuffer), &LenticularBuffer);
-	}
 	virtual void UpdateLenticularBuffer(const int Column, const int Row, const int Width, const int Height) {
 		LenticularBuffer.TileX = Column;
 		LenticularBuffer.TileY = Row;
@@ -643,29 +631,17 @@ protected:
 
 		TileXY = LenticularBuffer.TileX * LenticularBuffer.TileY;
 		CHECKDIMENSION(TileXY);
-
-		UpdateLenticularBuffer();
 	}
-	virtual void UpdateWorldBuffer() override {
-		Super::UpdateWorldBuffer();
+	
+	virtual BufferAndDeviceMemory& GetViewProjectionBuffer() override { return UniformBuffers[0]; }
+	virtual BufferAndDeviceMemory& GetLenticularBuffer() override { return UniformBuffers[1]; }
+	virtual BufferAndDeviceMemory& GetWorldBuffer() override { return UniformBuffers[2]; }
 
-		CopyToHostVisibleMemory(GetWorldMemory(), 0, sizeof(WorldBuffer), &WorldBuffer);
-	}
+	virtual Texture& GetRTColor() override { return Textures[0]; }
+	virtual Texture& GetRTDepth() override { return Textures[1]; }
 
-	virtual VkBuffer GetViewProjectionBuffer() override { return UniformBuffers[0].first; }
-	virtual VkBuffer GetLenticularBuffer() override { return UniformBuffers[1].first; }
-	virtual VkBuffer GetWorldBuffer() override { return UniformBuffers[2].first; }
-
-	virtual VkDeviceMemory GetViewProjectionMemory() override { return UniformBuffers[0].second; }
-	virtual VkDeviceMemory GetLenticularMemory() override { return UniformBuffers[1].second; }
-	virtual VkDeviceMemory GetWorldMemory() override { return UniformBuffers[2].second; }
-
-	virtual VkImageView GetColorRTV() override { return Textures[0].first.second; }
-	virtual VkImage GetColorRT() override { return Textures[0].first.first; }
-	virtual VkImageView GetDepthRTV() override { return Textures[1].first.second; }
-
-	virtual VkImageView GetColorMap() override { return Textures[2].first.second; }
-	virtual VkImageView GetDisplacementMap() override { return Textures[3].first.second; }
+	virtual Texture& GetColorMap() override { return Textures[2]; }
+	virtual Texture& GetDisplacementMap() override { return Textures[3]; }
 
 protected:
 	enum class HardWareEnum {
