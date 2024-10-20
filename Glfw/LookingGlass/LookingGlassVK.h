@@ -185,8 +185,8 @@ public:
 
 		//!< アニメーションテクスチャマップ [4]
 		constexpr uint32_t Width = 320, Height = 240;
-		VK::CreateTexture(VK_FORMAT_B8G8R8A8_UNORM, Width, Height);
-		CreateHostVisibleBuffer(Textures.back().Staging.emplace_back(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(uint32_t) * Width * Height, nullptr);		
+		VK::CreateTexture(VK_FORMAT_B8G8R8A8_UNORM, Width, Height, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+		CreateHostVisibleBuffer(Textures.back().Staging.emplace_back(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(uint32_t) * Width * Height, nullptr);
 	}
 	void CreateCommandBuffer() override {
 		//!< プライマリ
