@@ -73,6 +73,26 @@ public:
 		LOG();
 	}
 };
+class AnimatedDisplacementGlfwVK : public AnimatedDisplacementVK, public Glfw
+{
+private:
+	using Super = DisplacementVK;
+public:
+	AnimatedDisplacementGlfwVK(GLFWwindow* Win) : Glfw(Win) {}
+
+	virtual void CreateInstance() override {
+		Super::CreateInstance(InstanceExtensions);
+		LOG();
+	}
+	virtual void CreateSurface() override {
+		VERIFY_SUCCEEDED(glfwCreateWindowSurface(Instance, GlfwWindow, nullptr, &Surface));
+		LOG();
+	}
+	virtual void CreateSwapchain() override {
+		Super::CreateSwapchain(static_cast<const uint32_t>(FBWidth), static_cast<const uint32_t>(FBHeight));
+		LOG();
+	}
+};
 
 int main()
 {
@@ -159,6 +179,7 @@ int main()
 	}
 
 	DisplacementGlfwVK Vk(GlfwWin);
+	//AnimatedDisplacementGlfwVK Vk(GlfwWin);
 	Vk.Init();
 
 	Vk.PopulateCommandBuffer();

@@ -7,7 +7,7 @@
 #endif
 
 #define TO_RADIAN(x) ((x) * std::numbers::pi_v<float> / 180.0f)
-#define CHECKDIMENSION(_TileXY) if (_TileXY > TileDimensionMax) { /*LOG(std::data(std::format("TileX * TileY ({}) > TileDimensionMax ({})\n", _TileXY, TileDimensionMax)));*/ BREAKPOINT(); }
+#define CHECKDIMENSION(_TileXY) if (_TileXY > TileDimensionMax) { BREAKPOINT(); }
 
 class ViewsVK : public VK
 {
@@ -182,11 +182,6 @@ public:
 			PathAndPipelineStage({ BasePath / "Rocks007_2K_Displacement.dds", VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT }),
 		};
 		CreateGLITextures(PrimaryCommandBuffers[0].second[0], Paths);
-
-		//!< アニメーションテクスチャマップ [4]
-		constexpr uint32_t Width = 320, Height = 240;
-		VK::CreateTexture(VK_FORMAT_B8G8R8A8_UNORM, Width, Height, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
-		CreateHostVisibleBuffer(Textures.back().Staging.emplace_back(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(uint32_t) * Width * Height, nullptr);
 	}
 	void CreateCommandBuffer() override {
 		//!< プライマリ
@@ -520,7 +515,8 @@ public:
 		//!<【Pass1】フルスクリーン
 		PopulateSecondaryCommandBuffer_Pass1(i);
 	}
-
+	virtual void PopulatePrimaryCommandBuffer_Update(const int i) {
+	}
 	void PopulatePrimaryCommandBuffer_Pass0(const int i) {
 		const auto CB = PrimaryCommandBuffers[0].second[i];
 
@@ -575,9 +571,8 @@ public:
 			.pInheritanceInfo = nullptr
 		};
 		VERIFY_SUCCEEDED(vkBeginCommandBuffer(CB, &CBBI)); {
-			//!< (ステージングから) テクスチャ更新コマンド
-			constexpr uint32_t Width = 320, Height = 240;
-			PopulateCopyCommand(CB, Textures[4].Staging.back().first, Textures[4].ImageView.first, Width, Height, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_2_SHADER_READ_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
+			//!< アップデート (テクスチャアニメーション等)
+			PopulatePrimaryCommandBuffer_Update(i);
 
 			//!<【Pass0】オフスクリーン (テッセレーション、マルチビュー)
 			PopulatePrimaryCommandBuffer_Pass0(i);
@@ -598,7 +593,7 @@ public:
 	virtual void OnUpdate() override {
 		Super::OnUpdate();
 
-		Swapchain.Index;
+		//Swapchain.Index;
 
 		Super::UpdateViewProjectionBuffer();
 		Super::UpdateWorldBuffer();
@@ -606,13 +601,6 @@ public:
 		CopyToHostVisibleMemory(GetViewProjectionBuffer().second, 0, sizeof(ViewProjectionBuffer), &ViewProjectionBuffer);
 		CopyToHostVisibleMemory(GetLenticularBuffer().second, 0, sizeof(LenticularBuffer), &LenticularBuffer);
 		CopyToHostVisibleMemory(GetWorldBuffer().second, 0, sizeof(WorldBuffer), &WorldBuffer);
-
-		//!< (テクスチャの) ステージングを更新
-		constexpr uint32_t Width = 320, Height = 240;
-		std::array<uint32_t, Width * Height> Pattern;
-		std::random_device RndDev;
-		std::ranges::generate(Pattern, [&]() { return RndDev(); });
-		CopyToHostVisibleMemory(Textures[4].Staging.back().second, 0, sizeof(Pattern), std::data(Pattern));
 	}
 
 protected:
@@ -765,4 +753,46 @@ protected:
 		float QuiltAspect = 0.75f;
 	};
 	LENTICULAR_BUFFER LenticularBuffer;	
+};
+
+class AnimatedDisplacementVK : public DisplacementVK
+{
+private:
+	using Super = DisplacementVK;
+public:
+	virtual void CreateTexture() override {
+		//!< [Pass0] レンダーターゲット (デプステスト有) [0, 1]
+		CreateTexture_Render(VK_FORMAT_B8G8R8A8_UNORM, QuiltX, QuiltY);
+		CreateTexture_Depth(VK_FORMAT_D24_UNORM_S8_UINT, QuiltX, QuiltY);
+
+		//!< アニメーションテクスチャマップ (ステージングバッファ付き) [2, 3]
+		constexpr uint32_t Width = 320, Height = 240;
+		for (auto i = 0; i < 2; ++i) {
+			VK::CreateTexture(VK_FORMAT_B8G8R8A8_UNORM, Width, Height, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+			CreateHostVisibleBuffer(Textures.back().Staging.emplace_back(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(uint32_t) * Width * Height, nullptr);
+		}
+	}
+
+	virtual void PopulatePrimaryCommandBuffer_Update(const int i) override {
+		if (0 == i) {
+			const auto CB = PrimaryCommandBuffers[0].second[i];
+
+			//!< (ステージングから) テクスチャ更新コマンド
+			constexpr uint32_t Width = 320, Height = 240;
+			PopulateCopyCommand(CB, Textures[2].Staging.back().first, Textures[2].ImageView.first, Width, Height, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_2_SHADER_READ_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
+			PopulateCopyCommand(CB, Textures[3].Staging.back().first, Textures[3].ImageView.first, Width, Height, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_2_SHADER_READ_BIT, VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT);
+		}
+	}
+
+	virtual void OnUpdate() override {
+		Super::OnUpdate();
+
+		//!< (テクスチャの) ステージングを更新
+		constexpr uint32_t Width = 320, Height = 240;
+		std::array<uint32_t, Width* Height> Pattern;
+		std::random_device RndDev;
+		std::ranges::generate(Pattern, [&]() { return RndDev(); });
+		CopyToHostVisibleMemory(Textures[2].Staging.back().second, 0, sizeof(Pattern), std::data(Pattern));
+		CopyToHostVisibleMemory(Textures[3].Staging.back().second, 0, sizeof(Pattern), std::data(Pattern));
+	}
 };
