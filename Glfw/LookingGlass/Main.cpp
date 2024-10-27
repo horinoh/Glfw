@@ -21,13 +21,18 @@
 //!< コールバック (Callbacks)
 static void GlfwErrorCallback(int Code, const char* Description)
 {
-	std::cerr << "Error code = " << Code << ", " << Description << std::endl;
+	std::cerr << "[Glfw] ErrorCallback Code = " << Code << ", Description = " << Description << std::endl;
 }
 static void GlfwKeyCallback(GLFWwindow* Window, int Key, [[maybe_unused]] int Scancode, int Action, [[maybe_unused]] int Mods)
 {
+	std::cerr << "[Glfw] KeyCallback Key = " << Key << ", Scancode = " << Scancode << ", Action = " << Action << std::endl;
 	if (Key == GLFW_KEY_ESCAPE && Action == GLFW_PRESS) {
 		glfwSetWindowShouldClose(Window, GLFW_TRUE);
 	}
+}
+static void GlfwWindowSizeCallback([[maybe_unused]] GLFWwindow* Window, int Width, int Height)
+{
+	std::cerr << "[Glfw] SizeCallback Width = " << Width << ", Height = " << Height << std::endl;
 }
 
 class Glfw 
@@ -161,6 +166,7 @@ int main()
 	//!< コールバック登録 (Register callbacks) ウインドウ作成直後にやっておく
 	glfwSetErrorCallback(GlfwErrorCallback);
 	glfwSetKeyCallback(GlfwWin, GlfwKeyCallback); 
+	glfwSetWindowSizeCallback(GlfwWin, GlfwWindowSizeCallback);
 	{
 		int WinLeft, WinTop, WinRight, WinBottom;
 		glfwGetWindowFrameSize(GlfwWin, &WinLeft, &WinTop, &WinRight, &WinBottom);

@@ -51,7 +51,6 @@
 #define SIZE_DATA(X) VK::SizeAndDataPtr({ sizeof(X), std::data(X) })
 #define SIZE_DATA_NULL VK::SizeAndDataPtr({ 0, nullptr })
 
-
 class VK
 {
 public:
@@ -117,6 +116,7 @@ public:
 	virtual void CreateFence();
 	virtual void CreateSemaphore();
 	virtual void CreateSwapchain() { LOG(); }
+	virtual void ReCreateSwapchain();
 	virtual void CreateCommandBuffer();
 	virtual void CreateGeometry() { LOG(); }
 	virtual void CreateUniformBuffer() { LOG(); }
@@ -144,10 +144,10 @@ public:
 	}
 
 	virtual void WaitFence();
-	virtual void AcquireNextImage();
+	virtual bool AcquireNextImage();
 	virtual void OnUpdate() { if (0 == FrameCount) { LOG(); } }
 	virtual void Submit();
-	virtual void Present();
+	virtual bool Present();
 
 public:
 	void CreateInstance(const std::vector<const char*>& Extensions);

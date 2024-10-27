@@ -352,6 +352,29 @@ void VK::CreateSemaphore()
 	LOG();
 }
 
+//!< vkAcquireNextImageKHR() や vkQueuePresentKHR() が VK_ERROR_OUT_OF_DATE_KHR で失敗したときに再作成する
+void VK::ReCreateSwapchain() 
+{
+	VERIFY_SUCCEEDED(vkDeviceWaitIdle(Device));
+	
+	for (auto i : Framebuffers) {
+		vkDestroyFramebuffer(Device, i, nullptr);
+	}
+	Framebuffers.clear();
+
+	for (auto i : Swapchain.ImageAndViews) {
+		vkDestroyImageView(Device, i.second, nullptr);
+	}
+	Swapchain.ImageAndViews.clear();
+
+	if (VK_NULL_HANDLE != Swapchain.VkSwapchain) {
+		vkDestroySwapchainKHR(Device, Swapchain.VkSwapchain, nullptr);
+	}
+
+	CreateSwapchain();
+	CreateFramebuffer();
+}
+
 void VK::CreateCommandBuffer()
 {
 	AllocateCommandBuffers(CreateCommandPool(PrimaryCommandBuffers), std::size(Swapchain.ImageAndViews), VK_COMMAND_BUFFER_LEVEL_PRIMARY);
@@ -444,10 +467,18 @@ void VK::WaitFence()
 	if (0 == FrameCount) { LOG(); }
 }
 
-void VK::AcquireNextImage() 
+bool VK::AcquireNextImage() 
 {
 	//!< 次のイメージインデックスを取得、イメージが取得出来たらセマフォ(A) がシグナルされる (Acquire next image index, on acquire semaphore A will be signaled)
-	VERIFY_SUCCEEDED(vkAcquireNextImageKHR(Device, Swapchain.VkSwapchain, (std::numeric_limits<uint64_t>::max)(), NextImageAcquiredSemaphore, VK_NULL_HANDLE, &Swapchain.Index));
+	const auto Result = vkAcquireNextImageKHR(Device, Swapchain.VkSwapchain, (std::numeric_limits<uint64_t>::max)(), NextImageAcquiredSemaphore, VK_NULL_HANDLE, &Swapchain.Index);
+	if (Result == VK_ERROR_OUT_OF_DATE_KHR) {
+		//ReCreateSwapchain();
+		return false;
+	}
+	else if(Result != VK_SUBOPTIMAL_KHR) {
+		VERIFY_SUCCEEDED(Result);
+	}
+	return true;
 }
 
 void VK::Submit()
@@ -497,7 +528,7 @@ void VK::Submit()
 
 	if (0 == FrameCount) { LOG(); }
 }
-void VK::Present()
+bool VK::Present()
 {
 	//!< セマフォ (B) がシグナル (レンダリング完了) される迄待つ
 	const std::array WaitSems = { RenderFinishedSemaphore };
@@ -510,9 +541,18 @@ void VK::Present()
 		.swapchainCount = static_cast<uint32_t>(std::size(Swapchains)), .pSwapchains = std::data(Swapchains), .pImageIndices = std::data(ImageIndices),
 		.pResults = nullptr
 	};
-	VERIFY_SUCCEEDED(vkQueuePresentKHR(PresentQueue.first, &PI));
+	const auto Result = vkQueuePresentKHR(PresentQueue.first, &PI);
+	if (Result == VK_ERROR_OUT_OF_DATE_KHR || Result == VK_SUBOPTIMAL_KHR) {
+		//ReCreateSwapchain();
+		return false;
+	}
+	else {
+		VERIFY_SUCCEEDED(Result);
+	}
 
 	if (0 == FrameCount) { LOG(); }
+
+	return true;
 }
 
 void VK::CreateInstance(const std::vector<const char*>& Extensions)
@@ -616,7 +656,7 @@ void VK::CreateSwapchain(const uint32_t Width, const uint32_t Height)
 		.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
 		.presentMode = SelectedPresentMode,
 		.clipped = VK_TRUE,
-		.oldSwapchain = VK_NULL_HANDLE
+		.oldSwapchain = VK_NULL_HANDLE //!< スワップチェイン駆動中に作り直す場合に指定する
 	};
 	VERIFY_SUCCEEDED(vkCreateSwapchainKHR(Device, &SCI, nullptr, &Swapchain.VkSwapchain));
 
