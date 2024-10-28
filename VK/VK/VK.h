@@ -99,11 +99,17 @@ public:
 		CreateViewports();
 	}
 	virtual void Render() {
-		WaitFence();
-		AcquireNextImage();
-		OnUpdate();
-		Submit();
-		Present();
+		if (VK_NULL_HANDLE == Swapchain.VkSwapchain) {
+			ReCreateSwapchain();
+		}
+		else {
+			WaitFence();
+			if (AcquireNextImage()) {
+				OnUpdate();
+				Submit();
+				Present();
+			}
+		}
 
 		++FrameCount;
 	}
@@ -115,8 +121,9 @@ public:
 	virtual void CreateDevice();
 	virtual void CreateFence();
 	virtual void CreateSemaphore();
-	virtual void CreateSwapchain() { LOG(); }
-	virtual void ReCreateSwapchain();
+	virtual bool CreateSwapchain() { LOG(); return true; }
+	virtual void DestroySwapchain();
+	virtual bool ReCreateSwapchain();
 	virtual void CreateCommandBuffer();
 	virtual void CreateGeometry() { LOG(); }
 	virtual void CreateUniformBuffer() { LOG(); }
@@ -133,6 +140,7 @@ public:
 		LOG();
 	}
 	virtual void CreateDescriptor() { LOG(); }
+	void DestroyViewports() { Viewports.clear(); ScissorRects.clear(); }
 	virtual void CreateViewports();
 
 	virtual void PopulateCommandBuffer() {
@@ -151,7 +159,7 @@ public:
 
 public:
 	void CreateInstance(const std::vector<const char*>& Extensions);
-	void CreateSwapchain(const uint32_t Width, const uint32_t Height);
+	bool CreateSwapchain(const uint32_t Width, const uint32_t Height);
 
 	void CopyToHostVisibleMemory(const VkDeviceMemory DeviceMemory, const VkDeviceSize Offset, const VkDeviceSize Size, const void* Source, const VkDeviceSize MappedRangeOffset = 0, const VkDeviceSize MappedRangeSize = VK_WHOLE_SIZE) const;
 

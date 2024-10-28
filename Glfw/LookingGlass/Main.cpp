@@ -73,9 +73,12 @@ public:
 		VERIFY_SUCCEEDED(glfwCreateWindowSurface(Instance, GlfwWindow, nullptr, &Surface));
 		LOG();
 	}
-	virtual void CreateSwapchain() override {
-		Super::CreateSwapchain(static_cast<const uint32_t>(FBWidth), static_cast<const uint32_t>(FBHeight));
-		LOG();
+	virtual bool CreateSwapchain() override {
+		if (Super::CreateSwapchain(static_cast<uint32_t>(FBWidth), static_cast<uint32_t>(FBHeight))) {
+			LOG();
+			return true;
+		}
+		return false;
 	}
 };
 class AnimatedDisplacementGlfwVK : public AnimatedDisplacementVK, public Glfw
@@ -93,9 +96,12 @@ public:
 		VERIFY_SUCCEEDED(glfwCreateWindowSurface(Instance, GlfwWindow, nullptr, &Surface));
 		LOG();
 	}
-	virtual void CreateSwapchain() override {
-		Super::CreateSwapchain(static_cast<const uint32_t>(FBWidth), static_cast<const uint32_t>(FBHeight));
-		LOG();
+	virtual bool CreateSwapchain() override {
+		if (Super::CreateSwapchain(static_cast<uint32_t>(FBWidth), static_cast<uint32_t>(FBHeight))) {
+			LOG();
+			return true;
+		}
+		return false;
 	}
 };
 

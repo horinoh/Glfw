@@ -352,11 +352,10 @@ void VK::CreateSemaphore()
 	LOG();
 }
 
-//!< vkAcquireNextImageKHR() や vkQueuePresentKHR() が VK_ERROR_OUT_OF_DATE_KHR で失敗したときに再作成する
-void VK::ReCreateSwapchain() 
+void VK::DestroySwapchain() 
 {
 	VERIFY_SUCCEEDED(vkDeviceWaitIdle(Device));
-	
+
 	for (auto i : Framebuffers) {
 		vkDestroyFramebuffer(Device, i, nullptr);
 	}
@@ -369,10 +368,28 @@ void VK::ReCreateSwapchain()
 
 	if (VK_NULL_HANDLE != Swapchain.VkSwapchain) {
 		vkDestroySwapchainKHR(Device, Swapchain.VkSwapchain, nullptr);
+		Swapchain.VkSwapchain = VK_NULL_HANDLE;
 	}
 
-	CreateSwapchain();
-	CreateFramebuffer();
+	LOG();
+}
+//!< vkAcquireNextImageKHR() や vkQueuePresentKHR() が VK_ERROR_OUT_OF_DATE_KHR で失敗したときに再作成する
+bool VK::ReCreateSwapchain()
+{
+	if (VK_NULL_HANDLE == Swapchain.VkSwapchain && CreateSwapchain()) {
+		CreateFramebuffer();
+
+		//!< リサイズされた可能性があるのでやっておく
+		DestroyViewports();
+		CreateViewports();
+
+		//!< フレームバッファが作り直されたので、コマンド発行をやり直す
+		PopulateCommandBuffer();
+
+		LOG();
+		return true;
+	}
+	return false;
 }
 
 void VK::CreateCommandBuffer()
@@ -473,10 +490,11 @@ bool VK::AcquireNextImage()
 	const auto Result = vkAcquireNextImageKHR(Device, Swapchain.VkSwapchain, (std::numeric_limits<uint64_t>::max)(), NextImageAcquiredSemaphore, VK_NULL_HANDLE, &Swapchain.Index);
 	if (Result == VK_ERROR_OUT_OF_DATE_KHR) {
 		//ReCreateSwapchain();
+		DestroySwapchain();
 		return false;
 	}
-	else if(Result != VK_SUBOPTIMAL_KHR) {
-		VERIFY_SUCCEEDED(Result);
+	else if (Result != VK_SUCCESS && Result != VK_SUBOPTIMAL_KHR) {
+		return false;
 	}
 	return true;
 }
@@ -544,6 +562,7 @@ bool VK::Present()
 	const auto Result = vkQueuePresentKHR(PresentQueue.first, &PI);
 	if (Result == VK_ERROR_OUT_OF_DATE_KHR || Result == VK_SUBOPTIMAL_KHR) {
 		//ReCreateSwapchain();
+		DestroySwapchain();
 		return false;
 	}
 	else {
@@ -610,11 +629,14 @@ void VK::CreateInstance(const std::vector<const char*>& Extensions)
 	}
 #endif
 }
-void VK::CreateSwapchain(const uint32_t Width, const uint32_t Height)
+bool VK::CreateSwapchain(const uint32_t Width, const uint32_t Height)
 {
 	VkSurfaceCapabilitiesKHR SC;
 	VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(SelectedPhysDevice.first, Surface, &SC));
-
+	//!< VK_ERROR_OUT_OF_DATE_KHR 後、暫く Extent = {0, 0} が返る期間があるので、まともな値が返るまで失敗と扱う
+	if (0 == SC.currentExtent.width) {
+		return false;
+	}
 	Swapchain.Extent = 0xffffffff != SC.currentExtent.width ? SC.currentExtent : VkExtent2D({ .width = (std::clamp)(Width, SC.maxImageExtent.width, SC.minImageExtent.width), .height = (std::clamp)(Height, SC.minImageExtent.height, SC.minImageExtent.height) });
 
 	std::vector<uint32_t> QueueFamilyIndices;
@@ -690,6 +712,7 @@ void VK::CreateSwapchain(const uint32_t Width, const uint32_t Height)
 			Swapchain.ImageAndViews.emplace_back(ImageAndView({ i, IV }));
 		}
 	}
+	return true;
 }
 
 uint32_t VK::GetMemoryTypeIndex(const uint32_t TypeBits, const VkMemoryPropertyFlags MPF) const

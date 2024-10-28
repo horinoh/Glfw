@@ -74,9 +74,12 @@ public:
 		VERIFY_SUCCEEDED(glfwCreateWindowSurface(Instance, GlfwWindow, nullptr, &Surface));
 		LOG();
 	}
-	virtual void CreateSwapchain() override {
-		Super::CreateSwapchain(static_cast<uint32_t>(FBWidth), static_cast<uint32_t>(FBHeight));
-		LOG();
+	virtual bool CreateSwapchain() override {
+		if (Super::CreateSwapchain(static_cast<uint32_t>(FBWidth), static_cast<uint32_t>(FBHeight))) {
+			LOG();
+			return true;
+		}
+		return false; 
 	}
 	virtual void PopulatePrimaryCommandBuffer(const int i) override {
 		const auto CB = PrimaryCommandBuffers[0].second[i];
@@ -124,9 +127,12 @@ public:
 		VERIFY_SUCCEEDED(glfwCreateWindowSurface(Instance, GlfwWindow, nullptr, &Surface));
 		LOG();
 	}
-	virtual void CreateSwapchain() override {
-		Super::CreateSwapchain(static_cast<uint32_t>(FBWidth), static_cast<uint32_t>(FBHeight));
-		LOG();
+	virtual bool CreateSwapchain() override {
+		if (Super::CreateSwapchain(static_cast<uint32_t>(FBWidth), static_cast<uint32_t>(FBHeight))) {
+			LOG();
+			return true;
+		}
+		return false;
 	}
 
 	virtual void CreateGeometry() override {
