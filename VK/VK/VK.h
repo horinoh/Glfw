@@ -99,19 +99,16 @@ public:
 		CreateViewports();
 	}
 	virtual void Render() {
-		if (VK_NULL_HANDLE == Swapchain.VkSwapchain) {
-			ReCreateSwapchain();
-		}
-		else {
+		if (ReCreateSwapchain()) {
 			WaitFence();
 			if (AcquireNextImage()) {
 				OnUpdate();
 				Submit();
-				Present();
+				if (Present()) {
+				}
 			}
+			++FrameCount;
 		}
-
-		++FrameCount;
 	}
 
 	virtual void CreateInstance() { LOG(); }

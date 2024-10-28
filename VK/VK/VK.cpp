@@ -352,7 +352,9 @@ void VK::CreateSemaphore()
 	LOG();
 }
 
-void VK::DestroySwapchain() 
+//!< vkAcquireNextImageKHR() や vkQueuePresentKHR() が VK_ERROR_OUT_OF_DATE_KHR で失敗したとき等、スワップチェインを破棄する
+//!< ReCreateSwapchain() で作り直す必要がある
+void VK::DestroySwapchain()
 {
 	VERIFY_SUCCEEDED(vkDeviceWaitIdle(Device));
 
@@ -373,23 +375,28 @@ void VK::DestroySwapchain()
 
 	LOG();
 }
-//!< vkAcquireNextImageKHR() や vkQueuePresentKHR() が VK_ERROR_OUT_OF_DATE_KHR で失敗したときに再作成する
+//!< スワップチェインが現存なら何もしない、破棄されていれば再作成を試みる
+//!< スワップチェインが現存もしくは作り直された場合 true を返す
+//!< スワップチェインが破棄されている (まだ作り直されていない) 場合 false を返す
 bool VK::ReCreateSwapchain()
 {
-	if (VK_NULL_HANDLE == Swapchain.VkSwapchain && CreateSwapchain()) {
-		CreateFramebuffer();
+	if (VK_NULL_HANDLE == Swapchain.VkSwapchain) {
+		if (CreateSwapchain()) {
+			CreateFramebuffer();
 
-		//!< リサイズされた可能性があるのでやっておく
-		DestroyViewports();
-		CreateViewports();
+			//!< リサイズされた可能性があるのでやっておく
+			DestroyViewports();
+			CreateViewports();
 
-		//!< フレームバッファが作り直されたので、コマンド発行をやり直す
-		PopulateCommandBuffer();
+			//!< フレームバッファが作り直されたので、コマンド発行をやり直す
+			PopulateCommandBuffer();
 
-		LOG();
-		return true;
+			LOG();
+			return true;
+		}
+		return false;
 	}
-	return false;
+	return true;
 }
 
 void VK::CreateCommandBuffer()
@@ -489,7 +496,6 @@ bool VK::AcquireNextImage()
 	//!< 次のイメージインデックスを取得、イメージが取得出来たらセマフォ(A) がシグナルされる (Acquire next image index, on acquire semaphore A will be signaled)
 	const auto Result = vkAcquireNextImageKHR(Device, Swapchain.VkSwapchain, (std::numeric_limits<uint64_t>::max)(), NextImageAcquiredSemaphore, VK_NULL_HANDLE, &Swapchain.Index);
 	if (Result == VK_ERROR_OUT_OF_DATE_KHR) {
-		//ReCreateSwapchain();
 		DestroySwapchain();
 		return false;
 	}
@@ -561,7 +567,6 @@ bool VK::Present()
 	};
 	const auto Result = vkQueuePresentKHR(PresentQueue.first, &PI);
 	if (Result == VK_ERROR_OUT_OF_DATE_KHR || Result == VK_SUBOPTIMAL_KHR) {
-		//ReCreateSwapchain();
 		DestroySwapchain();
 		return false;
 	}
