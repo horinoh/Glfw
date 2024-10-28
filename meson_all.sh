@@ -13,6 +13,15 @@ rm -rf build
 meson setup build -DGLM=../../glm -DGLI=../../gli
 pushd build
 meson compile
-./Glfw
+#./Glfw
+popd
+popd
+
+pushd Glfw/LookingGlass
+rm -rf build
+meson setup build -DGLM=../../glm -DGLI=../../gli
+pushd build
+meson compile
+#./LookingGlass
 popd
 popd

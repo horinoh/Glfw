@@ -27,7 +27,7 @@ else
         Lib += dependency('glfw3')
 endif
 
-executable('Glfw', 'Main.cpp', install : true, include_directories : Inc, dependencies : Lib)
+executable('LookingGlass', 'Main.cpp', install : true, include_directories : Inc, dependencies : Lib)
 
 # GLSL コンパイル
 #foreach i : [ 'Glfw.vert', 'Glfw.frag' ]
