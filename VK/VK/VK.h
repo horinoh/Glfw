@@ -38,7 +38,7 @@
 #endif
 #endif
 
-//!< 【参考】
+//!< cf)
 //!< VK_ERROR_OUT_OF_DATE_KHR = -1000001004
 #ifdef _DEBUG
 #define VERIFY_SUCCEEDED(X) { const auto VR = (X); if(VK_SUCCESS != VR) { std::cerr << "VkResult = " << VR << " (0x" << std::hex << static_cast<uint32_t>(VR) << std::dec << ")" << std::dec << std::endl; BREAKPOINT(); } }
@@ -201,20 +201,34 @@ public:
 		});
 		ImageMemoryBarrier(CB, Image, SrcPSF, DstPSF, SrcAF, DstAF, OldIL, NewIL, ISR);
 	}
-	void PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkBuffer Buffer, const size_t Size, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const;
-	void PopulateCopyCommand(const VkCommandBuffer CB, const BufferAndDeviceMemory& Staging, const BufferAndDeviceMemory& Buffer, const size_t Size, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const {
+	void PopulateCopyCommand(const VkCommandBuffer CB,
+		const VkBuffer Staging, const VkBuffer Buffer, const size_t Size, 
+		const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const;
+	void PopulateCopyCommand(const VkCommandBuffer CB, 
+		const BufferAndDeviceMemory& Staging, const BufferAndDeviceMemory& Buffer, const size_t Size,
+		const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const {
 		PopulateCopyCommand(CB, Staging.first, Buffer.first, Size, AF, PSF);
 	}
-	void PopulateCopyCommand(const VkCommandBuffer CB, const BufferAndDeviceMemory& Staging, const BufferAndDeviceMemory& Buffer, const SizeAndDataPtr& Size, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const {
+	void PopulateCopyCommand(const VkCommandBuffer CB,
+		const BufferAndDeviceMemory& Staging, const BufferAndDeviceMemory& Buffer, const SizeAndDataPtr& Size, 
+		const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const {
 		PopulateCopyCommand(CB, Staging, Buffer, Size.first, AF, PSF);
 	}
 
-	void PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkImage Image, const std::span<const VkBufferImageCopy2>& BICs, const VkImageSubresourceRange& ISR, const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const;
-	void PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkImage Image, const gli::texture& Gli, const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const;
-	void PopulateCopyCommand(const VkCommandBuffer CB, const BufferAndDeviceMemory& Staging, const Texture& Image, const gli::texture& Gli, const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const {
+	void PopulateCopyCommand(const VkCommandBuffer CB,
+		const VkBuffer Staging, const VkImage Image, const std::span<const VkBufferImageCopy2>& BICs, const VkImageSubresourceRange& ISR, 
+		const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const;
+	void PopulateCopyCommand(const VkCommandBuffer CB, 
+		const VkBuffer Staging, const VkImage Image, const gli::texture& Gli, 
+		const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const;
+	void PopulateCopyCommand(const VkCommandBuffer CB,
+		const BufferAndDeviceMemory& Staging, const Texture& Image, const gli::texture& Gli, 
+		const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const {
 		PopulateCopyCommand(CB, Staging.first, Image.ImageView.first, Gli, IL, AF, PSF);
 	}
-	void PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkImage Image, const uint32_t Width, const uint32_t Height, const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const
+	void PopulateCopyCommand(const VkCommandBuffer CB,
+		const VkBuffer Staging, const VkImage Image, const uint32_t Width, const uint32_t Height,
+		const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const
 	{
 		const std::array BICs = {
 			VkBufferImageCopy2({
@@ -359,7 +373,7 @@ public:
 		const VkPipelineDynamicStateCreateInfo& PDSCI,
 		const VkPipelineLayout PLL,
 		const VkRenderPass RP);
-	//!< 引数をよく使うものに絞ったもの
+	//!< 引数をよく使うものに絞ったもの (Frequently used arguments only)
 	void CreatePipeline(VkPipeline& PL,
 		const VkShaderModule VS, const VkShaderModule FS, const VkShaderModule TES, const VkShaderModule TCS, const VkShaderModule GS,
 		const std::vector<VkVertexInputBindingDescription>& VIBDs, const std::vector<VkVertexInputAttributeDescription>& VIADs,
@@ -369,7 +383,7 @@ public:
 		const VkBool32 DepthEnable,
 		const VkPipelineLayout PLL,
 		const VkRenderPass RP);
-	//!< 頂点データによる通常メッシュ描画等
+	//!< 頂点データによる通常メッシュ描画等 (Draw mesh with vertices)
 	void CreatePipeline(VkPipeline& PL,
 		const VkShaderModule VS, const VkShaderModule FS,
 		const std::vector<VkVertexInputBindingDescription>& VIBDs, const std::vector<VkVertexInputAttributeDescription>& VIADs,
@@ -386,7 +400,7 @@ public:
 			PLL,
 			RP);
 	}
-	//!< 全画面ポリゴン描画等
+	//!< 全画面ポリゴン描画等 (Fullscreen polygon draw)
 	void CreatePipeline(VkPipeline& PL,
 		const VkShaderModule VS, const VkShaderModule FS,
 		const VkPipelineLayout PLL,
@@ -401,7 +415,7 @@ public:
 			PLL,
 			RP);
 	}
-	//!< テッセレーションによる描画等
+	//!< テッセレーションによる描画等 (Tesselation draw)
 	void CreatePipeline(VkPipeline& PL,
 		const VkShaderModule VS, const VkShaderModule FS, const VkShaderModule TES, const VkShaderModule TCS, const VkShaderModule GS,
 		const VkPipelineLayout PLL,

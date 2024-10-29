@@ -593,8 +593,6 @@ public:
 	virtual void OnUpdate() override {
 		Super::OnUpdate();
 
-		//Swapchain.Index;
-
 		Super::UpdateViewProjectionBuffer();
 		Super::UpdateWorldBuffer();
 
@@ -766,7 +764,6 @@ public:
 		CreateTexture_Depth(VK_FORMAT_D24_UNORM_S8_UINT, QuiltX, QuiltY);
 
 		//!< アニメーションテクスチャマップ (ステージングバッファ付き) [2, 3]
-		constexpr uint32_t Width = 320, Height = 240;
 		for (auto i = 0; i < 2; ++i) {
 			VK::CreateTexture(VK_FORMAT_B8G8R8A8_UNORM, Width, Height, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
 			CreateHostVisibleBuffer(Textures.back().Staging.emplace_back(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(uint32_t) * Width * Height, nullptr);
@@ -778,7 +775,6 @@ public:
 			const auto CB = PrimaryCommandBuffers[0].second[i];
 
 			//!< (ステージングから) テクスチャ更新コマンド
-			constexpr uint32_t Width = 320, Height = 240;
 			PopulateCopyCommand(CB, Textures[2].Staging.back().first, Textures[2].ImageView.first, Width, Height, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_2_SHADER_READ_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
 			PopulateCopyCommand(CB, Textures[3].Staging.back().first, Textures[3].ImageView.first, Width, Height, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_2_SHADER_READ_BIT, VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT);
 		}
@@ -788,11 +784,12 @@ public:
 		Super::OnUpdate();
 
 		//!< (テクスチャの) ステージングを更新
-		constexpr uint32_t Width = 320, Height = 240;
-		std::array<uint32_t, Width* Height> Pattern;
+		std::array<uint32_t, Width * Height> Pattern;
 		std::random_device RndDev;
 		std::ranges::generate(Pattern, [&]() { return RndDev(); });
 		CopyToHostVisibleMemory(Textures[2].Staging.back().second, 0, sizeof(Pattern), std::data(Pattern));
 		CopyToHostVisibleMemory(Textures[3].Staging.back().second, 0, sizeof(Pattern), std::data(Pattern));
 	}
+protected:
+	static const uint32_t Width = 320, Height = 240;
 };

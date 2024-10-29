@@ -211,7 +211,6 @@ void VK::CreateDevice()
 		const std::array Extensions = {
 			VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 		};
-//#pragma region VULKAN_FEATURE
 		VkPhysicalDeviceVulkan11Features PDV11F = {
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
 			.pNext = nullptr,
@@ -298,7 +297,6 @@ void VK::CreateDevice()
 			.shaderIntegerDotProduct = VK_FALSE,
 			.maintenance4 = VK_FALSE,
 		};
-//#pragma endregion
 		VkPhysicalDeviceFeatures PDF;
 		vkGetPhysicalDeviceFeatures(SelectedPhysDevice.first, &PDF);
 		const VkDeviceCreateInfo DCI = {
@@ -352,8 +350,8 @@ void VK::CreateSemaphore()
 	LOG();
 }
 
-//!< vkAcquireNextImageKHR() や vkQueuePresentKHR() が VK_ERROR_OUT_OF_DATE_KHR で失敗したとき等、スワップチェインを破棄する
-//!< ReCreateSwapchain() で作り直す必要がある
+//!< VK_ERROR_OUT_OF_DATE_KHR で失敗したときスワップチェインを破棄する (Destroy swapchain when failed with VK_ERROR_OUT_OF_DATE_KHR)
+//!< ReCreateSwapchain() で作り直す必要がある (Need to recreate by ReCreateSwapchain())
 void VK::DestroySwapchain()
 {
 	VERIFY_SUCCEEDED(vkDeviceWaitIdle(Device));
@@ -375,20 +373,18 @@ void VK::DestroySwapchain()
 
 	LOG();
 }
-//!< スワップチェインが現存なら何もしない、破棄されていれば再作成を試みる
-//!< スワップチェインが現存もしくは作り直された場合 true を返す
-//!< スワップチェインが破棄されている (まだ作り直されていない) 場合 false を返す
 bool VK::ReCreateSwapchain()
 {
+	//!< スワップチェインが健全なら何もしない (If swapchain is healthy, do nothing)
 	if (VK_NULL_HANDLE == Swapchain.VkSwapchain) {
 		if (CreateSwapchain()) {
 			CreateFramebuffer();
 
-			//!< リサイズされた可能性があるのでやっておく
+			//!< リサイズされた可能性があるのでやっておく (May be resized)
 			DestroyViewports();
 			CreateViewports();
 
-			//!< フレームバッファが作り直されたので、コマンド発行をやり直す
+			//!< フレームバッファが作り直されたので、コマンド発行をやり直す (Framebuffer is recreated, repopulate commands)
 			PopulateCommandBuffer();
 
 			LOG();
@@ -493,7 +489,7 @@ void VK::WaitFence()
 
 bool VK::AcquireNextImage() 
 {
-	//!< 次のイメージインデックスを取得、イメージが取得出来たらセマフォ(A) がシグナルされる (Acquire next image index, on acquire semaphore A will be signaled)
+	//!< 次のイメージインデックスを取得、イメージが取得出来たらセマフォ (A) がシグナルされる (Acquire next image index, on acquire semaphore A will be signaled)
 	const auto Result = vkAcquireNextImageKHR(Device, Swapchain.VkSwapchain, (std::numeric_limits<uint64_t>::max)(), NextImageAcquiredSemaphore, VK_NULL_HANDLE, &Swapchain.Index);
 	if (Result == VK_ERROR_OUT_OF_DATE_KHR) {
 		DestroySwapchain();
@@ -508,8 +504,8 @@ bool VK::AcquireNextImage()
 void VK::Submit()
 {
 	const auto& CB = PrimaryCommandBuffers[0].second[Swapchain.Index];
-	//!< セマフォ (A) がシグナル (次のイメージ取得) される迄待つ
-	//!< レンダリングが終わったらセマフォ (B) がシグナル (レンダリング完了) される
+	//!< 次のイメージ取得 セマフォ (A) がシグナルされる迄待つ (Wait next image acquired signal (A))
+	//!< レンダリング完了セマフォ (B) がシグナルされる (Rendering finish will be singnaled (B))
 	const std::array WaitSSIs = {
 		VkSemaphoreSubmitInfo({
 			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
@@ -554,7 +550,7 @@ void VK::Submit()
 }
 bool VK::Present()
 {
-	//!< セマフォ (B) がシグナル (レンダリング完了) される迄待つ
+	//!< レンダリング完了セマフォ (B) がシグナルされる迄待つ (Wait for rendering finish signal (B))
 	const std::array WaitSems = { RenderFinishedSemaphore };
 	const std::array Swapchains = { Swapchain.VkSwapchain };
 	const std::array ImageIndices = { Swapchain.Index };
@@ -638,7 +634,7 @@ bool VK::CreateSwapchain(const uint32_t Width, const uint32_t Height)
 {
 	VkSurfaceCapabilitiesKHR SC;
 	VERIFY_SUCCEEDED(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(SelectedPhysDevice.first, Surface, &SC));
-	//!< VK_ERROR_OUT_OF_DATE_KHR 後、暫く Extent = {0, 0} が返る期間があるので、まともな値が返るまで失敗と扱う
+	//!< VK_ERROR_OUT_OF_DATE_KHR 後、0 が返る期間があり失敗として扱う (For a while after VK_ERROR_OUT_OF_DATE_KHR, treat as failure)
 	if (0 == SC.currentExtent.width) {
 		return false;
 	}
@@ -660,7 +656,7 @@ bool VK::CreateSwapchain(const uint32_t Width, const uint32_t Height)
 		//!< MAILBOX がサポートされるなら採用する (Select if MAILBOX supported)
 		auto It = std::ranges::find(PMs, VK_PRESENT_MODE_MAILBOX_KHR);
 		if (It == std::end(PMs)) {
-			//!< 見つからない場合は FIFO (FIFO は必ずサポートされる)
+			//!< 見つからない場合は必ずサポートされる FIFO を選択 (If not found, select FIFO)
 			It = std::ranges::find(PMs, VK_PRESENT_MODE_FIFO_KHR);
 		}
 		SelectedPresentMode = *It;
@@ -683,7 +679,7 @@ bool VK::CreateSwapchain(const uint32_t Width, const uint32_t Height)
 		.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
 		.presentMode = SelectedPresentMode,
 		.clipped = VK_TRUE,
-		.oldSwapchain = VK_NULL_HANDLE //!< スワップチェイン駆動中に作り直す場合に指定する
+		.oldSwapchain = VK_NULL_HANDLE //!< スワップチェイン駆動中に作り直す場合に指定する (Use when swapchain is running)
 	};
 	VERIFY_SUCCEEDED(vkCreateSwapchainKHR(Device, &SCI, nullptr, &Swapchain.VkSwapchain));
 
@@ -738,7 +734,8 @@ void VK::CopyToHostVisibleMemory(const VkDeviceMemory DeviceMemory, const VkDevi
 	VERIFY_SUCCEEDED(vkMapMemory(Device, DeviceMemory, Offset, MappedRangeSize, static_cast<VkMemoryMapFlags>(0), &Data)); {
 		std::memcpy(Data, Source, Size);
 
-		//!< メモリコンテンツが変更されたことを明示的にドライバへ知らせる (vkMapMemory()した状態でやること)
+		//!< ここではメモリコンテンツが変更されたことを明示的にドライバへ知らせる事とする (Here, inform driver contents is changed)
+		//!< vkMapMemory() した状態でやること (Must be vkMapMemory())
 		if (true/*!VK_MEMORY_PROPERTY_HOST_COHERENT_BIT*/) {
 			const std::array MMRs = {
 				VkMappedMemoryRange({
@@ -877,7 +874,9 @@ void VK::ImageMemoryBarrier(const VkCommandBuffer CB,
 	};
 	vkCmdPipelineBarrier2(CB, &DI);
 }
-void VK::PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkBuffer Buffer, const size_t Size, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const
+void VK::PopulateCopyCommand(const VkCommandBuffer CB,
+	const VkBuffer Staging, const VkBuffer Buffer, const size_t Size, 
+	const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const
 {
 	BufferMemoryBarrier(CB, Buffer,
 		VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
@@ -890,7 +889,9 @@ void VK::PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, c
 		VK_PIPELINE_STAGE_2_TRANSFER_BIT, PSF,
 		VK_ACCESS_2_MEMORY_WRITE_BIT, AF);
 }
-void VK::PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkImage Image, const std::span<const VkBufferImageCopy2>& BICs, const VkImageSubresourceRange& ISR, const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const
+void VK::PopulateCopyCommand(const VkCommandBuffer CB, 
+	const VkBuffer Staging, const VkImage Image, const std::span<const VkBufferImageCopy2>& BICs, const VkImageSubresourceRange& ISR,
+	const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const
 {
 	ImageMemoryBarrier(CB,
 		Image,
@@ -915,7 +916,9 @@ void VK::PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, c
 		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, IL,
 		ISR);
 }
-void VK::PopulateCopyCommand(const VkCommandBuffer CB, const VkBuffer Staging, const VkImage Image, const gli::texture& Gli, const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const
+void VK::PopulateCopyCommand(const VkCommandBuffer CB,
+	const VkBuffer Staging, const VkImage Image, const gli::texture& Gli,
+	const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const
 {
 	const auto Layers = static_cast<uint32_t>(Gli.layers()) * static_cast<uint32_t>(Gli.faces());
 	const auto Levels = static_cast<uint32_t>(Gli.levels());
@@ -1504,7 +1507,8 @@ void VK::CreateFramebuffer(const VkRenderPass RP)
 
 void VK::PopulateSecondaryCommandBuffer([[maybe_unused]] const int i) 
 {
-#if 0
+#if false
+	//!< セカンダリを使う場合のサンプルコード (Sample code using secondary command buffer)
 	const auto RP = RenderPasses[0];
 	const auto CB = SecondaryCommandBuffers[0].second[i];
 
@@ -1574,16 +1578,16 @@ void VK::PopulatePrimaryCommandBuffer(const int i)
 			.renderArea = VkRect2D({.offset = VkOffset2D({.x = 0, .y = 0 }), .extent = Swapchain.Extent }),
 			.clearValueCount = static_cast<uint32_t>(size(CVs)), .pClearValues = data(CVs)
 		};
-#if 1
-		vkCmdBeginRenderPass(CB, &RPBI, VK_SUBPASS_CONTENTS_INLINE); {
-			//const auto PL = Pipelines[0];
-			
-			//vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, PL);
+#if true
+		//!< セカンダリを使わないサンプルコード (Sample code without secondary command buffer)
+		vkCmdBeginRenderPass(CB, &RPBI, VK_SUBPASS_CONTENTS_INLINE); {			
+			//vkCmdBindPipeline(CB, VK_PIPELINE_BIND_POINT_GRAPHICS, Pipelines[0]);
 
 			vkCmdSetViewport(CB, 0, static_cast<uint32_t>(std::size(Viewports)), std::data(Viewports));
 			vkCmdSetScissor(CB, 0, static_cast<uint32_t>(std::size(ScissorRects)), std::data(ScissorRects));
 		} vkCmdEndRenderPass(CB);
 #else
+		//!< セカンダリを使うサンプルコード (Sample code with secondary command buffer)
 		vkCmdBeginRenderPass(CB, &RPBI, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS); {
 			const auto SCB = SecondaryCommandBuffers[0].second[i];
 			const std::array SCBs = { SCB };

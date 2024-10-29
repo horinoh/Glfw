@@ -195,7 +195,6 @@ int main()
 	Vk.Init();
 
 	Vk.PopulateCommandBuffer();
-	Vk.OnUpdate();
 
 	//!< ƒ‹[ƒv (Loop)
 	while (!glfwWindowShouldClose(GlfwWin)) {
