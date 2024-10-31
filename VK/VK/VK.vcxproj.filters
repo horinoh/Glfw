@@ -27,6 +27,9 @@
     <ClInclude Include="GLI.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="CV.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="VK.cpp">

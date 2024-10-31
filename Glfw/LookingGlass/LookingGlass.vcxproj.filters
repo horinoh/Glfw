@@ -28,30 +28,28 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\..\Shaders\Views.vert">
-      <Filter>Shader Files</Filter>
-    </None>
-    <None Include="..\..\Shaders\QuiltRaw.frag">
-      <Filter>Shader Files</Filter>
-    </None>
-    <None Include="..\..\Shaders\Views.frag">
-      <Filter>Shader Files</Filter>
-    </None>
-    <None Include="..\..\Shaders\Views.geom">
-      <Filter>Shader Files</Filter>
-    </None>
-    <None Include="..\..\Shaders\Views.tesc">
-      <Filter>Shader Files</Filter>
-    </None>
-    <None Include="..\..\Shaders\Views.tese">
-      <Filter>Shader Files</Filter>
-    </None>
-    <None Include="..\..\Shaders\Quilt.vert">
-      <Filter>Shader Files</Filter>
-    </None>
-  </ItemGroup>
-  <ItemGroup>
     <CustomBuild Include="..\..\Shaders\Quilt.frag">
+      <Filter>Shader Files</Filter>
+    </CustomBuild>
+    <CustomBuild Include="..\..\Shaders\Quilt.vert">
+      <Filter>Shader Files</Filter>
+    </CustomBuild>
+    <CustomBuild Include="..\..\Shaders\QuiltRaw.frag">
+      <Filter>Shader Files</Filter>
+    </CustomBuild>
+    <CustomBuild Include="..\..\Shaders\Views.frag">
+      <Filter>Shader Files</Filter>
+    </CustomBuild>
+    <CustomBuild Include="..\..\Shaders\Views.geom">
+      <Filter>Shader Files</Filter>
+    </CustomBuild>
+    <CustomBuild Include="..\..\Shaders\Views.tesc">
+      <Filter>Shader Files</Filter>
+    </CustomBuild>
+    <CustomBuild Include="..\..\Shaders\Views.tese">
+      <Filter>Shader Files</Filter>
+    </CustomBuild>
+    <CustomBuild Include="..\..\Shaders\Views.vert">
       <Filter>Shader Files</Filter>
     </CustomBuild>
   </ItemGroup>

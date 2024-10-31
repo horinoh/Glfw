@@ -58,12 +58,13 @@ protected:
 	int FBWidth, FBHeight;
 };
 
-class DisplacementGlfwVK : public DisplacementVK, public Glfw
+class DisplacementDDSGlfwVK : public DisplacementDDSVK, public Glfw
 {
 private:
-	using Super = DisplacementVK;
+	using Super = DisplacementDDSVK;
 public:
-	DisplacementGlfwVK(GLFWwindow* Win) : Glfw(Win) {}
+	DisplacementDDSGlfwVK(GLFWwindow* Win) : Glfw(Win) {}
+	DisplacementDDSGlfwVK(GLFWwindow* Win, const std::filesystem::path& Color, const std::filesystem::path& Depth) : Glfw(Win), Super(Color, Depth) {}
 
 	virtual void CreateInstance() override {
 		Super::CreateInstance(InstanceExtensions);
@@ -81,6 +82,58 @@ public:
 		return false;
 	}
 };
+
+class DisplacementCVGlfwVK : public DisplacementCVVK, public Glfw
+{
+private:
+	using Super = DisplacementCVVK;
+public:
+	DisplacementCVGlfwVK(GLFWwindow* Win) : Glfw(Win) {}
+	DisplacementCVGlfwVK(GLFWwindow* Win, const std::filesystem::path& Color, const std::filesystem::path& Depth) : Glfw(Win), Super(Color, Depth) {}
+
+	virtual void CreateInstance() override {
+		Super::CreateInstance(InstanceExtensions);
+		LOG();
+	}
+	virtual void CreateSurface() override {
+		VERIFY_SUCCEEDED(glfwCreateWindowSurface(Instance, GlfwWindow, nullptr, &Surface));
+		LOG();
+	}
+	virtual bool CreateSwapchain() override {
+		if (Super::CreateSwapchain(static_cast<uint32_t>(FBWidth), static_cast<uint32_t>(FBHeight))) {
+			LOG();
+			return true;
+		}
+		return false;
+	}
+};
+
+class DisplacementCVRGBDGlfwVK : public DisplacementCVRGBDVK, public Glfw
+{
+private:
+	using Super = DisplacementCVRGBDVK;
+public:
+	DisplacementCVRGBDGlfwVK(GLFWwindow* Win) : Glfw(Win) {}
+	DisplacementCVRGBDGlfwVK(GLFWwindow* Win, const std::filesystem::path& RGBD) : Glfw(Win), Super(RGBD) {}
+
+	virtual void CreateInstance() override {
+		Super::CreateInstance(InstanceExtensions);
+		LOG();
+	}
+	virtual void CreateSurface() override {
+		VERIFY_SUCCEEDED(glfwCreateWindowSurface(Instance, GlfwWindow, nullptr, &Surface));
+		LOG();
+	}
+	virtual bool CreateSwapchain() override {
+		if (Super::CreateSwapchain(static_cast<uint32_t>(FBWidth), static_cast<uint32_t>(FBHeight))) {
+			LOG();
+			return true;
+		}
+		return false;
+	}
+};
+
+
 class AnimatedDisplacementGlfwVK : public AnimatedDisplacementVK, public Glfw
 {
 private:
@@ -190,7 +243,9 @@ int main()
 		std::cout << "Framebuffer size = " << FBWidth << "x" << GBHeight << std::endl;
 	}
 
-	DisplacementGlfwVK Vk(GlfwWin);
+	DisplacementDDSGlfwVK Vk(GlfwWin);
+	//DisplacementCVGlfwVK Vk(GlfwWin);
+	//DisplacementCVRGBDGlfwVK Vk(GlfwWin);
 	//AnimatedDisplacementGlfwVK Vk(GlfwWin);
 	Vk.Init();
 

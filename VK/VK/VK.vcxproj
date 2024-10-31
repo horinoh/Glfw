@@ -68,12 +68,14 @@
     <Import Project="..\..\Props\VK.props" />
     <Import Project="..\..\Props\GLM.props" />
     <Import Project="..\..\Props\GLI.props" />
+    <Import Project="..\..\Props\CVDebug.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="..\..\Props\VK.props" />
     <Import Project="..\..\Props\GLM.props" />
     <Import Project="..\..\Props\GLI.props" />
+    <Import Project="..\..\Props\CV.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -147,6 +149,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="CV.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="GLI.h" />
     <ClInclude Include="pch.h" />

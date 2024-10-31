@@ -17,6 +17,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "GLI.h"
+#include "CV.h"
 
 #ifdef _WIN64
 #pragma comment(lib, "vulkan-1.lib")
@@ -71,6 +72,12 @@ public:
 	};
 	using CommandPoolAndBuffers = std::pair<VkCommandPool, std::vector<VkCommandBuffer>>;
 	using PathAndPipelineStage = std::pair<std::filesystem::path, VkPipelineStageFlags2>;
+	struct CvMatAndFormatAndPipelineStage
+	{
+		cv::Mat Mat;
+		VkFormat Format;
+		VkPipelineStageFlags2 PipelineStage;
+	};
 
 	virtual ~VK();
 
@@ -175,6 +182,7 @@ public:
 	}
 	void CreateHostVisibleBuffer(BufferAndDeviceMemory& BADM, const VkBufferUsageFlags BUF, const size_t Size, const void* Source) const { CreateHostVisibleBuffer(&BADM.first, &BADM.second, BUF, Size, Source); }
 	void CreateHostVisibleBuffer(BufferAndDeviceMemory& BADM, const VkBufferUsageFlags BUF, const gli::texture& Gli) const { CreateHostVisibleBuffer(&BADM.first, &BADM.second, BUF, Gli.size(), Gli.data()); }
+	void CreateHostVisibleBuffer(BufferAndDeviceMemory& BADM, const VkBufferUsageFlags BUF, const cv::Mat& CvMat) const { CreateHostVisibleBuffer(&BADM.first, &BADM.second, BUF, CvMat.total() * CvMat.elemSize(), reinterpret_cast<const void*>(CvMat.ptr())); }
 
 	void CreateImage(VkImage* Image, VkDeviceMemory* DeviceMemory, const VkImageCreateInfo& ICI);
 	void CreateImageView(VkImageView* ImageView, const VkImageViewCreateInfo& IVCI) { VERIFY_SUCCEEDED(vkCreateImageView(Device, &IVCI, nullptr, ImageView)); }
@@ -207,12 +215,16 @@ public:
 	void PopulateCopyCommand(const VkCommandBuffer CB, 
 		const BufferAndDeviceMemory& Staging, const BufferAndDeviceMemory& Buffer, const size_t Size,
 		const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const {
-		PopulateCopyCommand(CB, Staging.first, Buffer.first, Size, AF, PSF);
+		PopulateCopyCommand(CB,
+			Staging.first, Buffer.first, Size, 
+			AF, PSF);
 	}
 	void PopulateCopyCommand(const VkCommandBuffer CB,
 		const BufferAndDeviceMemory& Staging, const BufferAndDeviceMemory& Buffer, const SizeAndDataPtr& Size, 
 		const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const {
-		PopulateCopyCommand(CB, Staging, Buffer, Size.first, AF, PSF);
+		PopulateCopyCommand(CB, 
+			Staging, Buffer, Size.first,
+			AF, PSF);
 	}
 
 	void PopulateCopyCommand(const VkCommandBuffer CB,
@@ -224,7 +236,19 @@ public:
 	void PopulateCopyCommand(const VkCommandBuffer CB,
 		const BufferAndDeviceMemory& Staging, const Texture& Image, const gli::texture& Gli, 
 		const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const {
-		PopulateCopyCommand(CB, Staging.first, Image.ImageView.first, Gli, IL, AF, PSF);
+		PopulateCopyCommand(CB, 
+			Staging.first, Image.ImageView.first, Gli, 
+			IL, AF, PSF);
+	}
+	void PopulateCopyCommand(const VkCommandBuffer CB,
+		const VkBuffer Staging, const VkImage Image, const cv::Mat& CvMat,
+		const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const;
+	void PopulateCopyCommand(const VkCommandBuffer CB,
+		const BufferAndDeviceMemory& Staging, const Texture& Image, const cv::Mat& CvMat,
+		const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const {
+		PopulateCopyCommand(CB,
+			Staging.first, Image.ImageView.first, CvMat, 
+			IL, AF, PSF);
 	}
 	void PopulateCopyCommand(const VkCommandBuffer CB,
 		const VkBuffer Staging, const VkImage Image, const uint32_t Width, const uint32_t Height,
@@ -244,7 +268,9 @@ public:
 			.baseMipLevel = 0, .levelCount = VK_REMAINING_MIP_LEVELS,
 			.baseArrayLayer = 0, .layerCount = VK_REMAINING_ARRAY_LAYERS
 		});
-		PopulateCopyCommand(CB, Staging, Image, BICs, ISR, IL, AF, PSF);
+		PopulateCopyCommand(CB,
+			Staging, Image, BICs, ISR, 
+			IL, AF, PSF);
 	}
 
 	CommandPoolAndBuffers& CreateCommandPool(std::vector<CommandPoolAndBuffers>& CPABs, const VkCommandPoolCreateInfo& CPCI) {
@@ -333,7 +359,11 @@ public:
 	[[nodiscard]] static VkComponentSwizzle ToVkComponentSwizzle(const gli::swizzle GLISwizzle);
 	[[nodiscard]] static VkComponentMapping ToVkComponentMapping(const gli::texture::swizzles_type GLISwizzleType);
 	Texture& CreateGLITexture(const std::filesystem::path& Path, gli::texture& Gli);
+
+	Texture& CreateCVTexture(const cv::Mat& CvMat, const VkFormat Format);
+
 	void CreateGLITextures(const VkCommandBuffer CB, const std::vector<PathAndPipelineStage>& Paths);
+	void CreateCVTextures(const VkCommandBuffer CB, const std::vector<CvMatAndFormatAndPipelineStage>& CvMats);
 
 	VkShaderModule CreateShaderModule(const std::filesystem::path& Path);
 

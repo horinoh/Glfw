@@ -170,18 +170,14 @@ public:
 		CreateHostVisibleBuffer(UniformBuffers.emplace_back(), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sizeof(WorldBuffer), &WorldBuffer);	
 	}
 	
+	virtual void CreateDisplacementTexture() = 0;
 	virtual void CreateTexture() override {
 		//!< [Pass0] レンダーターゲット (デプステスト有) [0, 1]
 		CreateTexture_Render(VK_FORMAT_B8G8R8A8_UNORM, QuiltX, QuiltY);
 		CreateTexture_Depth(VK_FORMAT_D24_UNORM_S8_UINT, QuiltX, QuiltY);
 
-		//!< テクスチャマップ、ディスプレースメントマップ読み込み [2, 3]
-		const auto BasePath = std::filesystem::path("..") / ".." / "Textures";
-		const std::vector Paths = {
-			PathAndPipelineStage({ BasePath / "Rocks007_2K_Color.dds", VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT }),
-			PathAndPipelineStage({ BasePath / "Rocks007_2K_Displacement.dds", VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT }),
-		};
-		CreateGLITextures(PrimaryCommandBuffers[0].second[0], Paths);
+		//!< ディスプレースメントマップ (カラー、深度) 読み込み [2, 3]
+		CreateDisplacementTexture();
 	}
 	void CreateCommandBuffer() override {
 		//!< プライマリ
@@ -753,23 +749,100 @@ protected:
 	LENTICULAR_BUFFER LenticularBuffer;	
 };
 
+class DisplacementDDSVK : public DisplacementVK
+{
+private:
+	using Super = DisplacementVK;
+public:
+	DisplacementDDSVK() {}
+	DisplacementDDSVK(const std::filesystem::path& Color, const std::filesystem::path& Depth) : ColorImagePath(Color), DepthImagePath(Depth) {}
+
+	virtual void CreateDisplacementTexture() override {
+		const std::vector Paths = {
+			PathAndPipelineStage({ ColorImagePath, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT }),
+			PathAndPipelineStage({ DepthImagePath, VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT }),
+		};
+		CreateGLITextures(PrimaryCommandBuffers[0].second[0], Paths);
+	}
+protected:
+	std::filesystem::path ColorImagePath = std::filesystem::path("..") / ".." / "Textures" / "Rocks007_2K_Color.dds";
+	std::filesystem::path DepthImagePath = std::filesystem::path("..") / ".." / "Textures" / "Rocks007_2K_Displacement.dds";
+};
+
+class DisplacementCVVK : public DisplacementVK
+{
+private:
+	using Super = DisplacementVK;
+public:
+	DisplacementCVVK() {}
+	DisplacementCVVK(const std::filesystem::path& Color, const std::filesystem::path& Depth) : ColorImagePath(Color), DepthImagePath(Depth) {}
+
+	virtual void CreateDisplacementTexture() override {
+		std::cout << cv::getBuildInformation() << std::endl;
+
+		auto CvColor = cv::imread(std::data(ColorImagePath.string()));
+		cv::cvtColor(CvColor, CvColor, cv::COLOR_BGR2RGBA);
+
+		auto CvDepth = cv::imread(std::data(DepthImagePath.string()));
+		cv::cvtColor(CvDepth, CvDepth, cv::COLOR_BGR2GRAY);
+
+		//cv::imshow("Color", CvColor);
+		//cv::imshow("Depth", CvDepth);
+
+		const std::vector Paths = {
+			CvMatAndFormatAndPipelineStage({ CvColor, VK_FORMAT_R8G8B8A8_UNORM, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT }),
+			CvMatAndFormatAndPipelineStage({ CvDepth, VK_FORMAT_R8_UNORM, VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT }),
+		};
+		CreateCVTextures(PrimaryCommandBuffers[0].second[0], Paths);
+	}
+protected:
+	std::filesystem::path ColorImagePath = std::filesystem::path("..") / ".." / "Textures" / "Bricks091_1K-JPG_Color.jpg";
+	std::filesystem::path DepthImagePath = std::filesystem::path("..") / ".." / "Textures" / "Bricks091_1K-JPG_Displacement.jpg";
+};
+
+class DisplacementCVRGBDVK : public DisplacementVK
+{
+private:
+	using Super = DisplacementVK;
+public:
+	DisplacementCVRGBDVK() {}
+	DisplacementCVRGBDVK(const std::filesystem::path& RGBD) : RGBDImagePath(RGBD) {}
+
+	virtual void CreateDisplacementTexture() override {
+		std::cout << cv::getBuildInformation() << std::endl;
+
+		auto CvRGBD = cv::imread(std::data(RGBDImagePath.string()));
+		const auto Cols = CvRGBD.cols / 2;
+
+		auto CvColor = cv::Mat(CvRGBD, cv::Rect(0, 0, Cols, CvRGBD.rows));
+		cv::cvtColor(CvColor, CvColor, cv::COLOR_BGR2RGBA);
+
+		auto CvDepth = cv::Mat(CvRGBD, cv::Rect(Cols, 0, Cols, CvRGBD.rows));
+		cv::cvtColor(CvDepth, CvDepth, cv::COLOR_BGR2GRAY);
+
+		const std::vector Paths = {
+			CvMatAndFormatAndPipelineStage({ CvColor, VK_FORMAT_R8G8B8A8_UNORM, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT }),
+			CvMatAndFormatAndPipelineStage({ CvDepth, VK_FORMAT_R8_UNORM, VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT }),
+		};
+		CreateCVTextures(PrimaryCommandBuffers[0].second[0], Paths);
+	}
+protected:
+	std::filesystem::path RGBDImagePath = std::filesystem::path("..") / ".." / "Textures" / "Bricks076C_1K.png";
+};
+
+
 class AnimatedDisplacementVK : public DisplacementVK
 {
 private:
 	using Super = DisplacementVK;
 public:
-	virtual void CreateTexture() override {
-		//!< [Pass0] レンダーターゲット (デプステスト有) [0, 1]
-		CreateTexture_Render(VK_FORMAT_B8G8R8A8_UNORM, QuiltX, QuiltY);
-		CreateTexture_Depth(VK_FORMAT_D24_UNORM_S8_UINT, QuiltX, QuiltY);
-
+	virtual void CreateDisplacementTexture() override {
 		//!< アニメーションテクスチャマップ (ステージングバッファ付き) [2, 3]
 		for (auto i = 0; i < 2; ++i) {
 			VK::CreateTexture(VK_FORMAT_B8G8R8A8_UNORM, Width, Height, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
 			CreateHostVisibleBuffer(Textures.back().Staging.emplace_back(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(uint32_t) * Width * Height, nullptr);
 		}
 	}
-
 	virtual void PopulatePrimaryCommandBuffer_Update(const int i) override {
 		if (0 == i) {
 			const auto CB = PrimaryCommandBuffers[0].second[i];
