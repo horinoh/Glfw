@@ -17,10 +17,19 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "GLI.h"
+
 #include "CV.h"
 
 #ifdef _WIN64
 #pragma comment(lib, "vulkan-1.lib")
+#endif
+
+#ifdef _WIN64
+#ifdef _DEBUG
+#pragma comment(lib, "opencv_world4100d.lib")
+#else
+#pragma comment(lib, "opencv_world4100.lib")
+#endif
 #endif
 
 //!< std::breakpoint() c++26

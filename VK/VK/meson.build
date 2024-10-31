@@ -16,11 +16,11 @@ if IsWin
 endif
 
 # 追加のライブラリ
+Compiler = meson.get_compiler('cpp')
 Lib = [
         dependency('vulkan'),
 ]
 if IsWin
-        Compiler = meson.get_compiler('cpp')
         if get_option('buildtype').startswith('debug')
                 Lib += Compiler.find_library('opencv_world4100d', dirs : get_option('CV') / 'x64' / 'vc17' / 'lib')
         else

@@ -13,6 +13,7 @@ Inc = [
 ]
 if IsWin
         Inc += include_directories(get_option('GLFW') / 'include')
+        Inc += include_directories(get_option('CV') / 'include')
 endif
 
 # 追加のライブラリ
@@ -23,13 +24,15 @@ Lib = [
 ]
 if IsWin
         Lib += Compiler.find_library('glfw3dll', dirs : get_option('GLFW') / 'lib-vc2022')
+        if get_option('buildtype').startswith('debug')
+                Lib += Compiler.find_library('opencv_world4100d', dirs : get_option('CV') / 'x64' / 'vc17' / 'lib')
+        else
+                Lib += Compiler.find_library('opencv_world4100', dirs : get_option('CV') / 'x64' / 'vc17' / 'lib')
+        endif
 else
         Lib += dependency('glfw3')
+        Lib += dependency('opencv4')
 endif
 
 executable('LookingGlass', 'Main.cpp', install : true, include_directories : Inc, dependencies : Lib)
 
-# GLSL コンパイル
-#foreach i : [ 'Glfw.vert', 'Glfw.frag' ]
-#        run_command('glslangValidator', '-V', i, '-o', 'build' / i + '.spv', '--target-env', 'vulkan1.3', '-g', '-Od', check: true)
-#endforeach
