@@ -566,9 +566,7 @@ bool VK::Present()
 		DestroySwapchain();
 		return false;
 	}
-	else {
-		VERIFY_SUCCEEDED(Result);
-	}
+	else if (VK_SUCCESS != Result) { BREAKPOINT(); }
 
 	if (0 == FrameCount) { LOG(); }
 

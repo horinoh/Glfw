@@ -6,7 +6,7 @@
 #pragma warning(disable : 4819)
 #else
 #pragma GCC diagnostic push
-//#pragma GCC diagnostic ignored ""
+#pragma GCC diagnostic ignored "-Wdeprecated-enum-enum-conversion"
 #endif
 #include <opencv2/opencv.hpp>
 #ifdef _WIN64

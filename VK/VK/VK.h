@@ -8,8 +8,10 @@
 #include <numbers>
 #include <span>
 #include <thread>
+#include <mutex>
 #include <source_location>
 #include <random>
+#include <cstddef>
 
 #include <vulkan/vulkan.h>
 

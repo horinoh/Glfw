@@ -47,7 +47,7 @@ public:
 
 	static constexpr float ToRadian(const float Degree) { return Degree * std::numbers::pi_v<float> / 180.0f; }
 
-	float GetOffsetAngle(const int i) const { return static_cast<const float>(i) * OffsetAngleCoef - HalfViewCone; }
+	float GetOffsetAngle(const int i) const { return static_cast<float>(i) * OffsetAngleCoef - HalfViewCone; }
 	void CreateProjectionMatrix(const int i) {
 		//!< 左右方向にずれている角度 (ラジアン)
 		const auto OffsetAngle = GetOffsetAngle(i);
@@ -97,8 +97,8 @@ protected:
 	virtual int GetTileY() const { return 6; }
 
 	virtual void UpdateViewProjectionBuffer() {
-		const auto Count = (std::min)(static_cast<size_t>(TileXY), _countof(ViewProjectionBuffer));
-		for (auto i = 0; i < Count; ++i) {
+		const auto Count = (std::min)(static_cast<size_t>(TileXY), std::size(ViewProjectionBuffer));
+		for (size_t i = 0; i < Count; ++i) {
 			ViewProjectionBuffer[i] = ProjectionMatrices[i] * ViewMatrices[i];
 		}
 	}
@@ -290,7 +290,7 @@ public:
 				.flags = 0,
 				.renderPass = RP,
 				.attachmentCount = static_cast<uint32_t>(std::size(IVs)), .pAttachments = std::data(IVs),
-				.width = static_cast<const uint32_t>(QuiltX), .height = static_cast<const uint32_t>(QuiltY),
+				.width = static_cast<uint32_t>(QuiltX), .height = static_cast<uint32_t>(QuiltY),
 				.layers = 1
 			};
 			VERIFY_SUCCEEDED(vkCreateFramebuffer(Device, &FCI, nullptr, &Framebuffers.emplace_back()));
@@ -340,22 +340,22 @@ public:
 			CreateDescriptorUpdateTemplate(DUT, {
 				VkDescriptorUpdateTemplateEntry({
 					.dstBinding = 0, .dstArrayElement = 0,
-					.descriptorCount = _countof(DUI.DBI_0), .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-					.offset = offsetof(DUI, DBI_0), .stride = sizeof(DUI)
+					.descriptorCount = static_cast<uint32_t>(std::size(DUI.DBI_0)), .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+					.offset = offsetof(DescriptorUpdateInfo, DBI_0), .stride = sizeof(DUI)
 				}),
 				VkDescriptorUpdateTemplateEntry({
 					.dstBinding = 1, .dstArrayElement = 0,
-					.descriptorCount = _countof(DUI.DII_0), .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-					.offset = offsetof(DUI, DII_0), .stride = sizeof(DUI)
+					.descriptorCount = static_cast<uint32_t>(std::size(DUI.DII_0)), .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+					.offset = offsetof(DescriptorUpdateInfo, DII_0), .stride = sizeof(DUI)
 				}),
 				VkDescriptorUpdateTemplateEntry({
 					.dstBinding = 2, .dstArrayElement = 0,
-					.descriptorCount = _countof(DUI.DII_1), .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-					.offset = offsetof(DUI, DII_1), .stride = sizeof(DUI)
+					.descriptorCount = static_cast<uint32_t>(std::size(DUI.DII_1)), .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+					.offset = offsetof(DescriptorUpdateInfo, DII_1), .stride = sizeof(DUI)
 				}),
 				VkDescriptorUpdateTemplateEntry({
 					.dstBinding = 3, .dstArrayElement = 0,
-					.descriptorCount = _countof(DUI.DBI_1), .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+					.descriptorCount = static_cast<uint32_t>(std::size(DUI.DBI_1)), .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 					.offset = offsetof(DescriptorUpdateInfo, DBI_1), .stride = sizeof(DUI)
 				}),
 				}, DSL);
@@ -392,13 +392,13 @@ public:
 			CreateDescriptorUpdateTemplate(DUT, {
 				VkDescriptorUpdateTemplateEntry({
 					.dstBinding = 0, .dstArrayElement = 0,
-					.descriptorCount = _countof(DUI.DII), .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-					.offset = offsetof(DUI, DII), .stride = sizeof(DUI)
+					.descriptorCount = static_cast<uint32_t>(std::size(DUI.DII)), .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+					.offset = offsetof(DescriptorUpdateInfo, DII), .stride = sizeof(DUI)
 				}),
 				VkDescriptorUpdateTemplateEntry({
 					.dstBinding = 1, .dstArrayElement = 0,
-					.descriptorCount = _countof(DUI.DBI), .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-					.offset = offsetof(DUI, DBI), .stride = sizeof(DUI)
+					.descriptorCount = static_cast<uint32_t>(std::size(DUI.DBI)), .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+					.offset = offsetof(DescriptorUpdateInfo, DBI), .stride = sizeof(DUI)
 				}),
 				}, DSL);
 			vkUpdateDescriptorSetWithTemplate(Device, DS, DUT, &DUI);
@@ -445,6 +445,7 @@ public:
 			VkMemoryRequirements2 MR = {
 				.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
 				.pNext = nullptr,
+				.memoryRequirements = {},
 			};
 			vkGetBufferMemoryRequirements2(Device, &BMRI, &MR);
 			const auto PLL = PipelineLayouts[0];
@@ -511,7 +512,7 @@ public:
 		//!<【Pass1】フルスクリーン
 		PopulateSecondaryCommandBuffer_Pass1(i);
 	}
-	virtual void PopulatePrimaryCommandBuffer_Update(const int i) {
+	virtual void PopulatePrimaryCommandBuffer_Update([[maybe_unused]] const int i) {
 	}
 	void PopulatePrimaryCommandBuffer_Pass0(const int i) {
 		const auto CB = PrimaryCommandBuffers[0].second[i];
@@ -862,6 +863,15 @@ public:
 		std::ranges::generate(Pattern, [&]() { return RndDev(); });
 		CopyToHostVisibleMemory(Textures[2].Staging.back().second, 0, sizeof(Pattern), std::data(Pattern));
 		CopyToHostVisibleMemory(Textures[3].Staging.back().second, 0, sizeof(Pattern), std::data(Pattern));
+
+		//cv::Mat CvColor, CvDepth;
+		//std::mutex Mutex;
+		//{
+		//	std::lock_guard Lock(Mutex);
+		//
+		//	CopyToHostVisibleMemory(Textures[2].Staging.back().second, 0, CvColor.total() * CvColor.elemSize(), CvColor.ptr());
+		//	CopyToHostVisibleMemory(Textures[3].Staging.back().second, 0, CvDepth.total() * CvDepth.elemSize(), CvDepth.ptr());
+		//}
 	}
 protected:
 	static const uint32_t Width = 320, Height = 240;

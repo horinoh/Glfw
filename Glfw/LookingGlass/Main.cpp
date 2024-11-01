@@ -64,7 +64,7 @@ private:
 	using Super = DisplacementDDSVK;
 public:
 	DisplacementDDSGlfwVK(GLFWwindow* Win) : Glfw(Win) {}
-	DisplacementDDSGlfwVK(GLFWwindow* Win, const std::filesystem::path& Color, const std::filesystem::path& Depth) : Glfw(Win), Super(Color, Depth) {}
+	DisplacementDDSGlfwVK(GLFWwindow* Win, const std::filesystem::path& Color, const std::filesystem::path& Depth) : Super(Color, Depth), Glfw(Win) {}
 
 	virtual void CreateInstance() override {
 		Super::CreateInstance(InstanceExtensions);
@@ -89,7 +89,7 @@ private:
 	using Super = DisplacementCVVK;
 public:
 	DisplacementCVGlfwVK(GLFWwindow* Win) : Glfw(Win) {}
-	DisplacementCVGlfwVK(GLFWwindow* Win, const std::filesystem::path& Color, const std::filesystem::path& Depth) : Glfw(Win), Super(Color, Depth) {}
+	DisplacementCVGlfwVK(GLFWwindow* Win, const std::filesystem::path& Color, const std::filesystem::path& Depth) : Super(Color, Depth), Glfw(Win) {}
 
 	virtual void CreateInstance() override {
 		Super::CreateInstance(InstanceExtensions);
@@ -114,7 +114,7 @@ private:
 	using Super = DisplacementCVRGBDVK;
 public:
 	DisplacementCVRGBDGlfwVK(GLFWwindow* Win) : Glfw(Win) {}
-	DisplacementCVRGBDGlfwVK(GLFWwindow* Win, const std::filesystem::path& RGBD) : Glfw(Win), Super(RGBD) {}
+	DisplacementCVRGBDGlfwVK(GLFWwindow* Win, const std::filesystem::path& RGBD) : Super(RGBD), Glfw(Win) {}
 
 	virtual void CreateInstance() override {
 		Super::CreateInstance(InstanceExtensions);
