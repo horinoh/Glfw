@@ -74,6 +74,9 @@
 #define SIZE_DATA(X) VK::SizeAndDataPtr({ sizeof(X), std::data(X) })
 #define SIZE_DATA_NULL VK::SizeAndDataPtr({ 0, nullptr })
 
+template<typename T> static constexpr size_t TotalSizeOf(const std::vector<T>& rhs) { return sizeof(T) * size(rhs); }
+template<typename T, size_t U> static constexpr size_t TotalSizeOf(const std::array<T, U>& rhs) { return sizeof(rhs); }
+
 class VK
 {
 public:

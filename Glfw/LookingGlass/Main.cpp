@@ -159,6 +159,32 @@ public:
 	}
 };
 
+#ifdef USE_CV
+class VideoDisplacementGlfwVK : public VideoDisplacementVK, public Glfw
+{
+private:
+	using Super = VideoDisplacementVK;
+public:
+	VideoDisplacementGlfwVK(GLFWwindow* Win) : Glfw(Win) {}
+
+	virtual void CreateInstance() override {
+		Super::CreateInstance(InstanceExtensions);
+		LOG();
+	}
+	virtual void CreateSurface() override {
+		VERIFY_SUCCEEDED(glfwCreateWindowSurface(Instance, GlfwWindow, nullptr, &Surface));
+		LOG();
+	}
+	virtual bool CreateSwapchain() override {
+		if (Super::CreateSwapchain(static_cast<uint32_t>(FBWidth), static_cast<uint32_t>(FBHeight))) {
+			LOG();
+			return true;
+		}
+		return false;
+	}
+};
+#endif
+
 int main()
 {
 	//!< ‰Šú‰» (Initialize)
@@ -250,6 +276,10 @@ int main()
 	//DisplacementCVRGBDGlfwVK Vk(GlfwWin);
 #endif
 	//AnimatedDisplacementGlfwVK Vk(GlfwWin);
+#ifdef USE_CV
+	//VideoDisplacementGlfwVK Vk(GlfwWin);
+#endif
+
 	Vk.Init();
 
 	Vk.PopulateCommandBuffer();
@@ -257,7 +287,7 @@ int main()
 	//!< ƒ‹[ƒv (Loop)
 	while (!glfwWindowShouldClose(GlfwWin)) {
 		glfwPollEvents();
-
+			
 		Vk.Render();
 	}
 

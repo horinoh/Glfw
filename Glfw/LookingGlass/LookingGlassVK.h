@@ -590,8 +590,8 @@ public:
 	virtual void OnUpdate() override {
 		Super::OnUpdate();
 
-		Super::UpdateViewProjectionBuffer();
-		Super::UpdateWorldBuffer();
+		UpdateViewProjectionBuffer();
+		UpdateWorldBuffer();
 
 		CopyToHostVisibleMemory(GetViewProjectionBuffer().second, 0, sizeof(ViewProjectionBuffer), &ViewProjectionBuffer);
 		CopyToHostVisibleMemory(GetLenticularBuffer().second, 0, sizeof(LenticularBuffer), &LenticularBuffer);
@@ -840,9 +840,10 @@ private:
 public:
 	virtual void CreateDisplacementTexture() override {
 		//!< アニメーションテクスチャマップ (ステージングバッファ付き) [2, 3]
+		const auto Size = sizeof(uint32_t) * GetWidth() * GetHeight();
 		for (auto i = 0; i < 2; ++i) {
-			VK::CreateTexture(VK_FORMAT_B8G8R8A8_UNORM, Width, Height, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
-			CreateHostVisibleBuffer(Textures.back().Staging.emplace_back(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sizeof(uint32_t) * Width * Height, nullptr);
+			VK::CreateTexture(VK_FORMAT_B8G8R8A8_UNORM, GetWidth(), GetHeight(), VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+			CreateHostVisibleBuffer(Textures.back().Staging.emplace_back(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, Size, nullptr);
 		}
 	}
 	virtual void PopulatePrimaryCommandBuffer_Update(const int i) override {
@@ -850,8 +851,8 @@ public:
 			const auto CB = PrimaryCommandBuffers[0].second[i];
 
 			//!< (ステージングから) テクスチャ更新コマンド
-			PopulateCopyCommand(CB, Textures[2].Staging.back().first, Textures[2].ImageView.first, Width, Height, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_2_SHADER_READ_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
-			PopulateCopyCommand(CB, Textures[3].Staging.back().first, Textures[3].ImageView.first, Width, Height, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_2_SHADER_READ_BIT, VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT);
+			PopulateCopyCommand(CB, Textures[2].Staging.back().first, Textures[2].ImageView.first, GetWidth(), GetHeight(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_2_SHADER_READ_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
+			PopulateCopyCommand(CB, Textures[3].Staging.back().first, Textures[3].ImageView.first, GetWidth(), GetHeight(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_2_SHADER_READ_BIT, VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT);
 		}
 	}
 
@@ -859,21 +860,69 @@ public:
 		Super::OnUpdate();
 
 		//!< (テクスチャの) ステージングを更新
-		std::array<uint32_t, Width * Height> Pattern;
+		std::vector<uint32_t> Pattern(GetWidth() * GetHeight());
 		std::random_device RndDev;
 		std::ranges::generate(Pattern, [&]() { return RndDev(); });
-		CopyToHostVisibleMemory(Textures[2].Staging.back().second, 0, sizeof(Pattern), std::data(Pattern));
-		CopyToHostVisibleMemory(Textures[3].Staging.back().second, 0, sizeof(Pattern), std::data(Pattern));
-
-		//cv::Mat CvColor, CvDepth;
-		//std::mutex Mutex;
-		//{
-		//	std::lock_guard Lock(Mutex);
-		//
-		//	CopyToHostVisibleMemory(Textures[2].Staging.back().second, 0, CvColor.total() * CvColor.elemSize(), CvColor.ptr());
-		//	CopyToHostVisibleMemory(Textures[3].Staging.back().second, 0, CvDepth.total() * CvDepth.elemSize(), CvDepth.ptr());
-		//}
+		CopyToHostVisibleMemory(Textures[2].Staging.back().second, 0, TotalSizeOf(Pattern), std::data(Pattern));
+		CopyToHostVisibleMemory(Textures[3].Staging.back().second, 0, TotalSizeOf(Pattern), std::data(Pattern));
 	}
 protected:
-	static const uint32_t Width = 320, Height = 240;
+	virtual uint32_t GetWidth() const { return 320; }
+	virtual uint32_t GetHeight() const { return 240; }
 };
+
+#ifdef USE_CV
+class VideoDisplacementVK : public AnimatedDisplacementVK
+{
+private:
+	using Super = AnimatedDisplacementVK;
+public:
+	VideoDisplacementVK() {}
+	VideoDisplacementVK(const std::filesystem::path& Video) : RGBDVideoPath(Video) {}
+
+	virtual void CreateDisplacementTexture() override {
+		Super::CreateDisplacementTexture();
+
+		Capture.open(std::data(RGBDVideoPath.string()));
+	}
+
+	virtual void OnUpdate() override {
+		Super::OnUpdate();
+
+		cv::Mat CvFrame;
+
+		Capture >> CvFrame;
+		cv::resize(CvFrame, CvFrame, cv::Size(CvSize.width << 1, CvSize.height));
+
+		const auto Cols = CvFrame.cols >> 1;
+		auto CvColor = cv::Mat(CvFrame, cv::Rect(0, 0, Cols, CvFrame.rows));
+		cv::cvtColor(CvColor, CvColor, cv::COLOR_RGB2RGBA);
+
+		auto CvDepth = cv::Mat(CvFrame, cv::Rect(Cols, 0, Cols, CvFrame.rows));
+		cv::cvtColor(CvDepth, CvDepth, cv::COLOR_RGB2RGBA);
+
+		//cv::imshow("Frame", CvFrame);
+
+		//!< (テクスチャの) ステージングを更新
+		{
+			std::lock_guard Lock(Mutex);
+		
+			CopyToHostVisibleMemory(Textures[2].Staging.back().second, 0, CvColor.total() * CvColor.elemSize(), CvColor.ptr());
+			CopyToHostVisibleMemory(Textures[3].Staging.back().second, 0, CvDepth.total() * CvDepth.elemSize(), CvDepth.ptr());
+		}
+	}
+protected:
+	virtual uint32_t GetWidth() const override { return CvSize.width; }
+	virtual uint32_t GetHeight() const override { return CvSize.height; }
+
+	//virtual void UpdateWorldBuffer() {
+	//	auto X = 5.0f, Y = 6.0f, Z = 2.0f;
+	//	WorldBuffer = glm::scale(glm::mat4(1.0f), glm::vec3(X, Y, Z));
+	//}
+
+	std::filesystem::path RGBDVideoPath = std::filesystem::path("..") / ".." / "Textures" / "RGBD1.mp4";
+	cv::Size CvSize = cv::Size(1440, 2560) / 4;
+	cv::VideoCapture Capture;
+	std::mutex Mutex;
+};
+#endif
