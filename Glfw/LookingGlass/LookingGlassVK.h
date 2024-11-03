@@ -770,6 +770,7 @@ protected:
 	std::filesystem::path DepthImagePath = std::filesystem::path("..") / ".." / "Textures" / "Rocks007_2K_Displacement.dds";
 };
 
+#ifdef USE_CV
 class DisplacementCVVK : public DisplacementVK
 {
 private:
@@ -830,7 +831,7 @@ public:
 protected:
 	std::filesystem::path RGBDImagePath = std::filesystem::path("..") / ".." / "Textures" / "Bricks076C_1K.png";
 };
-
+#endif
 
 class AnimatedDisplacementVK : public DisplacementVK
 {

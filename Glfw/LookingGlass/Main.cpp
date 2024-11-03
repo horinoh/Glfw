@@ -83,6 +83,7 @@ public:
 	}
 };
 
+#ifdef USE_CV
 class DisplacementCVGlfwVK : public DisplacementCVVK, public Glfw
 {
 private:
@@ -132,7 +133,7 @@ public:
 		return false;
 	}
 };
-
+#endif
 
 class AnimatedDisplacementGlfwVK : public AnimatedDisplacementVK, public Glfw
 {
@@ -244,8 +245,10 @@ int main()
 	}
 
 	DisplacementDDSGlfwVK Vk(GlfwWin);
+#ifdef USE_CV
 	//DisplacementCVGlfwVK Vk(GlfwWin);
 	//DisplacementCVRGBDGlfwVK Vk(GlfwWin);
+#endif
 	//AnimatedDisplacementGlfwVK Vk(GlfwWin);
 	Vk.Init();
 

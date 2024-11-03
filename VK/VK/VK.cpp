@@ -944,6 +944,7 @@ void VK::PopulateCopyCommand(const VkCommandBuffer CB,
 		IL, AF, PSF);
 }
 
+#ifdef USE_CV
 void VK::PopulateCopyCommand(const VkCommandBuffer CB,
 	const VkBuffer Staging, const VkImage Image, const cv::Mat& CvMat,
 	const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const 
@@ -973,6 +974,7 @@ void VK::PopulateCopyCommand(const VkCommandBuffer CB,
 		Staging, Image, BICs, ISR, 
 		IL, AF, PSF);
 }
+#endif
 
 void VK::CreateGeometry(const std::vector<VK::GeometryCreateInfo>& GCIs)
 {
@@ -1242,61 +1244,6 @@ VK::Texture& VK::CreateGLITexture(const std::filesystem::path & Path, gli::textu
 
 	return Tex;
 }
-
-VK::Texture& VK::CreateCVTexture(const cv::Mat& CvMat, const VkFormat Format)
-{
-	auto& Tex = Textures.emplace_back();
-	auto& Image = Tex.ImageView.first;
-	auto& ImageView = Tex.ImageView.second;
-	auto& DeviceMemory = Tex.DeviceMemory;
-	
-	constexpr std::array<uint32_t, 0> QFIs = {};
-	const VkImageCreateInfo ICI = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-		.pNext = nullptr,
-		.flags = 0,
-		.imageType = VK_IMAGE_TYPE_2D,
-		.format = Format,
-		.extent = VkExtent3D({
-			.width = static_cast<uint32_t>(CvMat.cols),
-			.height = static_cast<uint32_t>(CvMat.rows),
-			.depth = 1
-		}),
-		.mipLevels = 1,
-		.arrayLayers = 1,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.tiling = VK_IMAGE_TILING_OPTIMAL,
-		.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-		.queueFamilyIndexCount = static_cast<uint32_t>(std::size(QFIs)), .pQueueFamilyIndices = std::data(QFIs),
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
-	};
-	CreateImage(&Image, &DeviceMemory, ICI);
-
-	const VkImageViewCreateInfo IVCI = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-		.pNext = nullptr,
-		.flags = 0,
-		.image = Image,
-		.viewType = VK_IMAGE_VIEW_TYPE_2D,
-		.format = Format,
-		.components = VkComponentMapping({ 
-			.r = VK_COMPONENT_SWIZZLE_R, 
-			.g = VK_COMPONENT_SWIZZLE_G, 
-			.b = VK_COMPONENT_SWIZZLE_B, 
-			.a = VK_COMPONENT_SWIZZLE_A 
-		}),
-		.subresourceRange = VkImageSubresourceRange({
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.baseMipLevel = 0, .levelCount = VK_REMAINING_MIP_LEVELS,
-			.baseArrayLayer = 0, .layerCount = VK_REMAINING_ARRAY_LAYERS
-		})
-	};
-	CreateImageView(&ImageView, IVCI);
-
-	return Tex;
-}
-
 void VK::CreateGLITextures(const VkCommandBuffer CB, const std::vector<PathAndPipelineStage>& Paths)
 {
 	std::vector<gli::texture> Glis;
@@ -1328,6 +1275,61 @@ void VK::CreateGLITextures(const VkCommandBuffer CB, const std::vector<PathAndPi
 		vkDestroyBuffer(Device, i.first, nullptr);
 	}
 }
+
+#ifdef USE_CV
+VK::Texture& VK::CreateCVTexture(const cv::Mat& CvMat, const VkFormat Format)
+{
+	auto& Tex = Textures.emplace_back();
+	auto& Image = Tex.ImageView.first;
+	auto& ImageView = Tex.ImageView.second;
+	auto& DeviceMemory = Tex.DeviceMemory;
+
+	constexpr std::array<uint32_t, 0> QFIs = {};
+	const VkImageCreateInfo ICI = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.imageType = VK_IMAGE_TYPE_2D,
+		.format = Format,
+		.extent = VkExtent3D({
+			.width = static_cast<uint32_t>(CvMat.cols),
+			.height = static_cast<uint32_t>(CvMat.rows),
+			.depth = 1
+		}),
+		.mipLevels = 1,
+		.arrayLayers = 1,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.tiling = VK_IMAGE_TILING_OPTIMAL,
+		.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		.queueFamilyIndexCount = static_cast<uint32_t>(std::size(QFIs)), .pQueueFamilyIndices = std::data(QFIs),
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+	};
+	CreateImage(&Image, &DeviceMemory, ICI);
+
+	const VkImageViewCreateInfo IVCI = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.image = Image,
+		.viewType = VK_IMAGE_VIEW_TYPE_2D,
+		.format = Format,
+		.components = VkComponentMapping({
+			.r = VK_COMPONENT_SWIZZLE_R,
+			.g = VK_COMPONENT_SWIZZLE_G,
+			.b = VK_COMPONENT_SWIZZLE_B,
+			.a = VK_COMPONENT_SWIZZLE_A
+		}),
+		.subresourceRange = VkImageSubresourceRange({
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.baseMipLevel = 0, .levelCount = VK_REMAINING_MIP_LEVELS,
+			.baseArrayLayer = 0, .layerCount = VK_REMAINING_ARRAY_LAYERS
+		})
+	};
+	CreateImageView(&ImageView, IVCI);
+
+	return Tex;
+}
 void VK::CreateCVTextures(const VkCommandBuffer CB, const std::vector<CvMatAndFormatAndPipelineStage>& CvMats)
 {
 	std::vector<Texture> Texs;
@@ -1358,6 +1360,7 @@ void VK::CreateCVTextures(const VkCommandBuffer CB, const std::vector<CvMatAndFo
 		vkDestroyBuffer(Device, i.first, nullptr);
 	}
 }
+#endif
 
 void VK::CreateRenderPass(const VkAttachmentLoadOp ALO, const VkAttachmentStoreOp ASO,
 	const VkImageLayout Init, const VkImageLayout Final)

@@ -20,17 +20,28 @@
 
 #include "GLI.h"
 
-#include "CV.h"
-
 #ifdef _WIN64
 #pragma comment(lib, "vulkan-1.lib")
 #endif
+
+//#define USE_CV
+#ifdef USE_CV
+#include "CV.h"
 
 #ifdef _WIN64
 #ifdef _DEBUG
 #pragma comment(lib, "opencv_world4100d.lib")
 #else
 #pragma comment(lib, "opencv_world4100.lib")
+#endif
+#endif
+#endif
+
+//#define USE_HAILO
+#ifdef USE_HAILO
+#include "Hailo.h"
+#ifdef _WIN64
+#pragma comment(lib, "libhailort.lib")
 #endif
 #endif
 
@@ -83,12 +94,14 @@ public:
 	};
 	using CommandPoolAndBuffers = std::pair<VkCommandPool, std::vector<VkCommandBuffer>>;
 	using PathAndPipelineStage = std::pair<std::filesystem::path, VkPipelineStageFlags2>;
+#ifdef USE_CV
 	struct CvMatAndFormatAndPipelineStage
 	{
 		cv::Mat Mat;
 		VkFormat Format;
 		VkPipelineStageFlags2 PipelineStage;
 	};
+#endif
 
 	virtual ~VK();
 
@@ -193,7 +206,9 @@ public:
 	}
 	void CreateHostVisibleBuffer(BufferAndDeviceMemory& BADM, const VkBufferUsageFlags BUF, const size_t Size, const void* Source) const { CreateHostVisibleBuffer(&BADM.first, &BADM.second, BUF, Size, Source); }
 	void CreateHostVisibleBuffer(BufferAndDeviceMemory& BADM, const VkBufferUsageFlags BUF, const gli::texture& Gli) const { CreateHostVisibleBuffer(&BADM.first, &BADM.second, BUF, Gli.size(), Gli.data()); }
+#ifdef USE_CV
 	void CreateHostVisibleBuffer(BufferAndDeviceMemory& BADM, const VkBufferUsageFlags BUF, const cv::Mat& CvMat) const { CreateHostVisibleBuffer(&BADM.first, &BADM.second, BUF, CvMat.total() * CvMat.elemSize(), reinterpret_cast<const void*>(CvMat.ptr())); }
+#endif
 
 	void CreateImage(VkImage* Image, VkDeviceMemory* DeviceMemory, const VkImageCreateInfo& ICI);
 	void CreateImageView(VkImageView* ImageView, const VkImageViewCreateInfo& IVCI) { VERIFY_SUCCEEDED(vkCreateImageView(Device, &IVCI, nullptr, ImageView)); }
@@ -251,6 +266,7 @@ public:
 			Staging.first, Image.ImageView.first, Gli, 
 			IL, AF, PSF);
 	}
+#ifdef USE_CV
 	void PopulateCopyCommand(const VkCommandBuffer CB,
 		const VkBuffer Staging, const VkImage Image, const cv::Mat& CvMat,
 		const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const;
@@ -261,6 +277,7 @@ public:
 			Staging.first, Image.ImageView.first, CvMat, 
 			IL, AF, PSF);
 	}
+#endif
 	void PopulateCopyCommand(const VkCommandBuffer CB,
 		const VkBuffer Staging, const VkImage Image, const uint32_t Width, const uint32_t Height,
 		const VkImageLayout IL, const VkAccessFlags2 AF, const VkPipelineStageFlagBits2 PSF) const
@@ -370,12 +387,11 @@ public:
 	[[nodiscard]] static VkComponentSwizzle ToVkComponentSwizzle(const gli::swizzle GLISwizzle);
 	[[nodiscard]] static VkComponentMapping ToVkComponentMapping(const gli::texture::swizzles_type GLISwizzleType);
 	Texture& CreateGLITexture(const std::filesystem::path& Path, gli::texture& Gli);
-
-	Texture& CreateCVTexture(const cv::Mat& CvMat, const VkFormat Format);
-
 	void CreateGLITextures(const VkCommandBuffer CB, const std::vector<PathAndPipelineStage>& Paths);
+#ifdef USE_CV
+	Texture& CreateCVTexture(const cv::Mat& CvMat, const VkFormat Format);
 	void CreateCVTextures(const VkCommandBuffer CB, const std::vector<CvMatAndFormatAndPipelineStage>& CvMats);
-
+#endif
 	VkShaderModule CreateShaderModule(const std::filesystem::path& Path);
 
 	void CreateRenderPass(const VkRenderPassCreateInfo& RPCI) { VERIFY_SUCCEEDED(vkCreateRenderPass(Device, &RPCI, nullptr, &RenderPasses.emplace_back())); }

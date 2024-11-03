@@ -30,6 +30,9 @@
     <ClInclude Include="CV.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Hailo.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
