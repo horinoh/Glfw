@@ -32,6 +32,7 @@ if IsWin
 else
         Lib += dependency('glfw3')
         Lib += dependency('opencv4')
+        Lib += Compiler.find_library('hailort', dirs : '/usr/lib')
 endif
 
 executable('LookingGlass', 'Main.cpp', install : true, include_directories : Inc, dependencies : Lib)

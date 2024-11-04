@@ -299,26 +299,26 @@ int main()
 	}
 
 	DisplacementDDSGlfwVK Vk(GlfwWin
-		//, std::filesystem::path("..") / ".." / "Textures" / "Rocks007_2K_Color.dds"
-		//, std::filesystem::path("..") / ".." / "Textures" / "Rocks007_2K_Displacement.dds"
+		//, std::filesystem::path("..") / ".." / "Assets" / "Rocks007_2K_Color.dds"
+		//, std::filesystem::path("..") / ".." / "Assets" / "Rocks007_2K_Displacement.dds"
 	);
 #ifdef USE_CV
 	//DisplacementCVGlfwVK Vk(GlfwWin
-	//	//, std::filesystem::path("..") / ".." / "Textures" / "Bricks091_1K-JPG_Color.jpg"
-	//	//, std::filesystem::path("..") / ".." / "Textures" / "Bricks091_1K-JPG_Displacement.jpg"
+	//	//, std::filesystem::path("..") / ".." / "Assets" / "Bricks091_1K-JPG_Color.jpg"
+	//	//, std::filesystem::path("..") / ".." / "Assets" / "Bricks091_1K-JPG_Displacement.jpg"
 	//);
 	//DisplacementCVRGBDGlfwVK Vk(GlfwWin
-	//	//, std::filesystem::path("..") / ".." / "Textures" / "Bricks076C_1K.png"
+	//	//, std::filesystem::path("..") / ".." / "Assets" / "Bricks076C_1K.png"
 	//);
 #endif
 	//AnimatedDisplacementGlfwVK Vk(GlfwWin);
 #ifdef USE_CV
 	//VideoDisplacementGlfwVK Vk(GlfwWin
-	//	//, std::filesystem::path("..") / ".." / "Textures" / "RGBD0.mp4"
+	//	//, std::filesystem::path("..") / ".." / "Assets" / "RGBD0.mp4"
 	//);
 #ifdef USE_HAILO
 	//DepthEstimationDisplacementGlfwVK Vk(GlfwWin
-	//	//, std::filesystem::path("..") / ".." / "Textures" / "instance_segmentation.mp4"
+	//	//, std::filesystem::path("..") / ".." / "Assets" / "instance_segmentation.mp4"
 	//);
 #endif
 #endif

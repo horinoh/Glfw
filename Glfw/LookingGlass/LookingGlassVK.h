@@ -766,8 +766,8 @@ public:
 		CreateGLITextures(PrimaryCommandBuffers[0].second[0], Paths);
 	}
 protected:
-	std::filesystem::path ColorImagePath = std::filesystem::path("..") / ".." / "Textures" / "Rocks007_2K_Color.dds";
-	std::filesystem::path DepthImagePath = std::filesystem::path("..") / ".." / "Textures" / "Rocks007_2K_Displacement.dds";
+	std::filesystem::path ColorImagePath = std::filesystem::path("..") / ".." / "Assets" / "Rocks007_2K_Color.dds";
+	std::filesystem::path DepthImagePath = std::filesystem::path("..") / ".." / "Assets" / "Rocks007_2K_Displacement.dds";
 };
 
 #ifdef USE_CV
@@ -798,8 +798,8 @@ public:
 		CreateCVTextures(PrimaryCommandBuffers[0].second[0], Paths);
 	}
 protected:
-	std::filesystem::path ColorImagePath = std::filesystem::path("..") / ".." / "Textures" / "Bricks091_1K-JPG_Color.jpg";
-	std::filesystem::path DepthImagePath = std::filesystem::path("..") / ".." / "Textures" / "Bricks091_1K-JPG_Displacement.jpg";
+	std::filesystem::path ColorImagePath = std::filesystem::path("..") / ".." / "Assets" / "Bricks091_1K-JPG_Color.jpg";
+	std::filesystem::path DepthImagePath = std::filesystem::path("..") / ".." / "Assets" / "Bricks091_1K-JPG_Displacement.jpg";
 };
 
 class DisplacementCVRGBDVK : public DisplacementVK
@@ -830,7 +830,7 @@ public:
 	}
 protected:
 	//!< RBGD イメージ (RGBD image)
-	std::filesystem::path ImagePath = std::filesystem::path("..") / ".." / "Textures" / "Bricks076C_1K.png";
+	std::filesystem::path ImagePath = std::filesystem::path("..") / ".." / "Assets" / "Bricks076C_1K.png";
 };
 #endif
 
@@ -921,7 +921,7 @@ protected:
 	//}
 
 	//!< RGBD ビデオ (RGBD video)
-	std::filesystem::path VideoPath = std::filesystem::path("..") / ".." / "Textures" / "RGBD1.mp4";
+	std::filesystem::path VideoPath = std::filesystem::path("..") / ".." / "Assets" / "RGBD1.mp4";
 	cv::Size CvSize = cv::Size(1440, 2560) / 4;
 	cv::VideoCapture Capture;
 };
@@ -986,7 +986,7 @@ public:
 		}
 	}
 protected:
-	std::filesystem::path VideoPath = std::filesystem::path("..") / ".." / "Textures" / "XXX.mp4";
+	std::filesystem::path VideoPath = std::filesystem::path("..") / ".." / "Assets" / "instance_segmentation.mp4";
 };
 #endif //!< USE_HAILO
 #endif //!< USE_CV

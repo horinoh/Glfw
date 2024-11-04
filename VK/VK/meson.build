@@ -28,6 +28,7 @@ if IsWin
         endif
 else
         Lib += dependency('opencv4')
+        Lib += Compiler.find_library('hailort', dirs : '/usr/lib')
 endif
 
 # OS によるライブラリ名の違い
