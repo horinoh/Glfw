@@ -24,10 +24,16 @@
 #pragma comment(lib, "vulkan-1.lib")
 #endif
 
+//#ifndef USE_CV
 //#define USE_CV
+//#endif
+//#ifndef USE_HALIO
+//#define USE_HAILO
+//#endif
+
+//!< 使用には USE_CV を定義する必要がある
 #ifdef USE_CV
 #include "CV.h"
-
 #ifdef _WIN64
 #ifdef _DEBUG
 #pragma comment(lib, "opencv_world4100d.lib")
@@ -37,7 +43,7 @@
 #endif
 #endif
 
-//#define USE_HAILO
+//!< 使用には USE_HAILO を定義する必要がある
 #ifdef USE_HAILO
 #include "Hailo.h"
 #ifdef _WIN64
@@ -118,8 +124,7 @@ public:
 		CreateSurface();
 		SelectSurfaceFormat();
 		CreateDevice();
-		CreateFence();
-		CreateSemaphore();
+		CreateFenceAndSemaphore();
 		CreateSwapchain();
 		CreateCommandBuffer();
 		CreateGeometry();
@@ -150,8 +155,7 @@ public:
 	virtual void CreateSurface() { LOG(); }
 	virtual void SelectSurfaceFormat();
 	virtual void CreateDevice();
-	virtual void CreateFence();
-	virtual void CreateSemaphore();
+	virtual void CreateFenceAndSemaphore();
 	virtual bool CreateSwapchain() { LOG(); return true; }
 	virtual void DestroySwapchain();
 	virtual bool ReCreateSwapchain();

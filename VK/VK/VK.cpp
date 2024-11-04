@@ -318,7 +318,7 @@ void VK::CreateDevice()
 	LOG();
 }
 
-void VK::CreateFence()
+void VK::CreateFenceAndSemaphore()
 {
 	//!< フェンスをシグナル状態で作成 (Fence, create as signaled) CPU - GPU
 	constexpr VkFenceCreateInfo FCI = {
@@ -328,11 +328,6 @@ void VK::CreateFence()
 	};
 	VERIFY_SUCCEEDED(vkCreateFence(Device, &FCI, nullptr, &Fence));
 
-	LOG();
-}
-
-void VK::CreateSemaphore()
-{
 	constexpr VkSemaphoreTypeCreateInfo STCI = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
 		.pNext = nullptr,

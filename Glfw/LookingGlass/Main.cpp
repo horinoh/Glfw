@@ -6,6 +6,7 @@
 #include <map>
 
 #include "VK.h"
+
 #include <GLFW/glfw3.h>
 
 #include "LookingGlassVK.h"
@@ -166,6 +167,7 @@ private:
 	using Super = VideoDisplacementVK;
 public:
 	VideoDisplacementGlfwVK(GLFWwindow* Win) : Glfw(Win) {}
+	VideoDisplacementGlfwVK(GLFWwindow* Win, const std::filesystem::path& RGBD) : Super(RGBD), Glfw(Win) {}
 
 	virtual void CreateInstance() override {
 		Super::CreateInstance(InstanceExtensions);
@@ -183,7 +185,33 @@ public:
 		return false;
 	}
 };
-#endif
+#ifdef USE_HAILO
+class DepthEstimationDisplacementGlfwVK : public DepthEstimationDisplacementVK, public Glfw
+{
+private:
+	using Super = DepthEstimationDisplacementVK;
+public:
+	DepthEstimationDisplacementGlfwVK(GLFWwindow* Win) : Glfw(Win) {}
+	DepthEstimationDisplacementGlfwVK(GLFWwindow* Win, const std::filesystem::path& Video) : Super(Video), Glfw(Win) {}
+
+	virtual void CreateInstance() override {
+		Super::CreateInstance(InstanceExtensions);
+		LOG();
+	}
+	virtual void CreateSurface() override {
+		VERIFY_SUCCEEDED(glfwCreateWindowSurface(Instance, GlfwWindow, nullptr, &Surface));
+		LOG();
+	}
+	virtual bool CreateSwapchain() override {
+		if (Super::CreateSwapchain(static_cast<uint32_t>(FBWidth), static_cast<uint32_t>(FBHeight))) {
+			LOG();
+			return true;
+		}
+		return false;
+	}
+};
+#endif //!< USE_HAILO
+#endif //!< USE_CV
 
 int main()
 {
@@ -270,14 +298,29 @@ int main()
 		std::cout << "Framebuffer size = " << FBWidth << "x" << GBHeight << std::endl;
 	}
 
-	DisplacementDDSGlfwVK Vk(GlfwWin);
+	DisplacementDDSGlfwVK Vk(GlfwWin
+		//, std::filesystem::path("..") / ".." / "Textures" / "Rocks007_2K_Color.dds"
+		//, std::filesystem::path("..") / ".." / "Textures" / "Rocks007_2K_Displacement.dds"
+	);
 #ifdef USE_CV
-	//DisplacementCVGlfwVK Vk(GlfwWin);
-	//DisplacementCVRGBDGlfwVK Vk(GlfwWin);
+	//DisplacementCVGlfwVK Vk(GlfwWin
+	//	//, std::filesystem::path("..") / ".." / "Textures" / "Bricks091_1K-JPG_Color.jpg"
+	//	//, std::filesystem::path("..") / ".." / "Textures" / "Bricks091_1K-JPG_Displacement.jpg"
+	//);
+	//DisplacementCVRGBDGlfwVK Vk(GlfwWin
+	//	//, std::filesystem::path("..") / ".." / "Textures" / "Bricks076C_1K.png"
+	//);
 #endif
 	//AnimatedDisplacementGlfwVK Vk(GlfwWin);
 #ifdef USE_CV
-	//VideoDisplacementGlfwVK Vk(GlfwWin);
+	//VideoDisplacementGlfwVK Vk(GlfwWin
+	//	//, std::filesystem::path("..") / ".." / "Textures" / "RGBD0.mp4"
+	//);
+#ifdef USE_HAILO
+	//DepthEstimationDisplacementGlfwVK Vk(GlfwWin
+	//	//, std::filesystem::path("..") / ".." / "Textures" / "instance_segmentation.mp4"
+	//);
+#endif
 #endif
 
 	Vk.Init();

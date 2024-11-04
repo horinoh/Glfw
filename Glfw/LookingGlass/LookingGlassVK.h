@@ -808,12 +808,12 @@ private:
 	using Super = DisplacementVK;
 public:
 	DisplacementCVRGBDVK() {}
-	DisplacementCVRGBDVK(const std::filesystem::path& RGBD) : RGBDImagePath(RGBD) {}
+	DisplacementCVRGBDVK(const std::filesystem::path& RGBD) : ImagePath(RGBD) {}
 
 	virtual void CreateDisplacementTexture() override {
 		std::cout << cv::getBuildInformation() << std::endl;
 
-		auto CvRGBD = cv::imread(std::data(RGBDImagePath.string()));
+		auto CvRGBD = cv::imread(std::data(ImagePath.string()));
 		const auto Cols = CvRGBD.cols / 2;
 
 		auto CvColor = cv::Mat(CvRGBD, cv::Rect(0, 0, Cols, CvRGBD.rows));
@@ -829,7 +829,8 @@ public:
 		CreateCVTextures(PrimaryCommandBuffers[0].second[0], Paths);
 	}
 protected:
-	std::filesystem::path RGBDImagePath = std::filesystem::path("..") / ".." / "Textures" / "Bricks076C_1K.png";
+	//!< RBGD イメージ (RGBD image)
+	std::filesystem::path ImagePath = std::filesystem::path("..") / ".." / "Textures" / "Bricks076C_1K.png";
 };
 #endif
 
@@ -878,12 +879,12 @@ private:
 	using Super = AnimatedDisplacementVK;
 public:
 	VideoDisplacementVK() {}
-	VideoDisplacementVK(const std::filesystem::path& Video) : RGBDVideoPath(Video) {}
+	VideoDisplacementVK(const std::filesystem::path& RGBD) : VideoPath(RGBD) {}
 
 	virtual void CreateDisplacementTexture() override {
 		Super::CreateDisplacementTexture();
 
-		Capture.open(std::data(RGBDVideoPath.string()));
+		Capture.open(std::data(VideoPath.string()));
 	}
 
 	virtual void OnUpdate() override {
@@ -901,15 +902,14 @@ public:
 		auto CvDepth = cv::Mat(CvFrame, cv::Rect(Cols, 0, Cols, CvFrame.rows));
 		cv::cvtColor(CvDepth, CvDepth, cv::COLOR_RGB2RGBA);
 
-		//cv::imshow("Frame", CvFrame);
+#if true
+		//!< プレビュー
+		cv::imshow("Frame", CvFrame);
+#endif
 
 		//!< (テクスチャの) ステージングを更新
-		{
-			std::lock_guard Lock(Mutex);
-		
-			CopyToHostVisibleMemory(Textures[2].Staging.back().second, 0, CvColor.total() * CvColor.elemSize(), CvColor.ptr());
-			CopyToHostVisibleMemory(Textures[3].Staging.back().second, 0, CvDepth.total() * CvDepth.elemSize(), CvDepth.ptr());
-		}
+		CopyToHostVisibleMemory(Textures[2].Staging.back().second, 0, CvColor.total() * CvColor.elemSize(), CvColor.ptr());
+		CopyToHostVisibleMemory(Textures[3].Staging.back().second, 0, CvDepth.total() * CvDepth.elemSize(), CvDepth.ptr());
 	}
 protected:
 	virtual uint32_t GetWidth() const override { return CvSize.width; }
@@ -920,9 +920,73 @@ protected:
 	//	WorldBuffer = glm::scale(glm::mat4(1.0f), glm::vec3(X, Y, Z));
 	//}
 
-	std::filesystem::path RGBDVideoPath = std::filesystem::path("..") / ".." / "Textures" / "RGBD1.mp4";
+	//!< RGBD ビデオ (RGBD video)
+	std::filesystem::path VideoPath = std::filesystem::path("..") / ".." / "Textures" / "RGBD1.mp4";
 	cv::Size CvSize = cv::Size(1440, 2560) / 4;
 	cv::VideoCapture Capture;
-	std::mutex Mutex;
 };
+
+#ifdef USE_HAILO
+class DepthEstimationDisplacementVK : public AnimatedDisplacementVK, public DepthEstimation
+{
+private:
+	using Super = AnimatedDisplacementVK;
+public:
+	DepthEstimationDisplacementVK() {}
+	DepthEstimationDisplacementVK(const std::filesystem::path& Video) : VideoPath(Video) {}
+
+	void StartInference() {
+		const auto Cam = Hailo::GetLibCameGSTStr(1280, 960, 30);
+		auto CapturePath = std::string_view(std::empty(VideoPath.string()) ? std::data(Cam) : VideoPath.string());
+		DepthEstimation::Start("scdepthv3.hef", CapturePath,
+			[&]() {
+				const auto& CM = DepthEstimation::GetColorMap();
+				const auto& DM = DepthEstimation::GetDepthMap();
+				if (CM.empty() || DM.empty()) { return false; }
+				
+#if true
+				//!< プレビュー
+				{
+					cv::Mat L, R, LR;
+					const auto CvSize = cv::Size(320, 240);
+
+					//!< 左 : カラーマップ
+					cv::resize(CM, L, CvSize, cv::INTER_AREA);
+
+					//!< 右 : 深度マップ (AI の出力を別スレッドで深度マップへ加工しているので、ロックする必要がある)
+					{
+						std::lock_guard Lock(DepthEstimation::GetMutex());
+
+						cv::resize(DM, R, CvSize, cv::INTER_AREA);
+					}
+
+					//!< 連結する為に左右のタイプを 8UC3 に合わせる必要がある
+					cv::cvtColor(R, R, cv::COLOR_GRAY2BGR);
+					R.convertTo(R, CV_8UC3);
+					//!< 水平連結
+					cv::hconcat(L, R, LR);
+
+					cv::imshow("LR", LR);
+				}
 #endif
+				return true;
+			});
+	}
+	virtual void OnUpdate() override {
+		Super::OnUpdate();
+
+		//!< (テクスチャの) ステージングを更新
+		const auto& CvColor = DepthEstimation::GetColorMap();
+		const auto& CvDepth = DepthEstimation::GetDepthMap();
+		if (!CvColor.empty() && !CvDepth.empty()) {
+			std::lock_guard Lock(GetMutex());
+
+			CopyToHostVisibleMemory(Textures[2].Staging.back().second, 0, CvColor.total() * CvColor.elemSize(), CvColor.ptr());
+			CopyToHostVisibleMemory(Textures[3].Staging.back().second, 0, CvDepth.total() * CvDepth.elemSize(), CvDepth.ptr());
+		}
+	}
+protected:
+	std::filesystem::path VideoPath = std::filesystem::path("..") / ".." / "Textures" / "XXX.mp4";
+};
+#endif //!< USE_HAILO
+#endif //!< USE_CV
