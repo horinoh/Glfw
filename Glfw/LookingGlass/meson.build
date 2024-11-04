@@ -14,6 +14,7 @@ Inc = [
 if IsWin
         Inc += include_directories(get_option('GLFW') / 'include')
         Inc += include_directories(get_option('CV') / 'include')
+        Inc += include_directories(get_option('HAILO') / 'include')
 endif
 
 # 追加のライブラリ
@@ -29,6 +30,7 @@ if IsWin
         else
                 Lib += Compiler.find_library('opencv_world4100', dirs : get_option('CV') / 'x64' / 'vc17' / 'lib')
         endif
+        Lib += Compiler.find_library('libhailort', dirs : get_option('HAILO') / 'lib')
 else
         Lib += dependency('glfw3')
         Lib += dependency('opencv4')

@@ -1,3 +1,4 @@
 option('GLM', type : 'string', value : '', description : 'GLM SDK')
 option('GLI', type : 'string', value : '', description : 'GLI SDK')
 option('CV', type : 'string', value : '', description : 'CV SDK')
+option('HAILO', type : 'string', value : '', description : 'HAILO SDK')
