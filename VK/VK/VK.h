@@ -69,12 +69,15 @@
 
 //!< cf)
 //!< VK_ERROR_OUT_OF_DATE_KHR = -1000001004
+//!< VK_ERROR_LAYER_NOT_PRESENT = -6
+//!< VK_ERROR_EXTENSION_NOT_PRESENT = -7,
 #ifdef _DEBUG
-#define VERIFY_SUCCEEDED(X) { const auto VR = (X); if(VK_SUCCESS != VR) { std::cerr << "VkResult = " << VR << " (0x" << std::hex << static_cast<uint32_t>(VR) << std::dec << ")" << std::dec << std::endl; BREAKPOINT(); } }
-#define LOG() std::cout << std::source_location::current().function_name() << std::endl
+#define FUNC_NAME() std::source_location::current().function_name()
+#define LOG() std::cout << FUNC_NAME() << std::endl
+#define VERIFY_SUCCEEDED(X) { const auto VR = (X); if(VK_SUCCESS != VR) { std::cerr << FUNC_NAME() << " VkResult = " << VR << " (0x" << std::hex << static_cast<uint32_t>(VR) << std::dec << ")" << std::dec << std::endl; BREAKPOINT(); } }
 #else
-#define VERIFY_SUCCEEDED(X) (X) 
 #define LOG()
+#define VERIFY_SUCCEEDED(X) (X) 
 #endif
 
 #define SIZE_DATA(X) VK::SizeAndDataPtr({ sizeof(X), std::data(X) })
