@@ -921,7 +921,7 @@ protected:
 	//}
 
 	//!< RGBD ƒrƒfƒI (RGBD video)
-	std::filesystem::path VideoPath = std::filesystem::path("..") / ".." / "Assets" / "RGBD1.mp4";
+	std::filesystem::path VideoPath = std::filesystem::path("..") / ".." / "Assets" / "christmas2020-Record3D.mp4";
 	cv::Size CvSize = cv::Size(1440, 2560) / 4;
 	cv::VideoCapture Capture;
 };
