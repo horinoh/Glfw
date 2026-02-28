@@ -290,11 +290,27 @@ public:
 
 int main()
 {
+	int Major, Minor, Rev;
+	glfwGetVersion(&Major, &Minor, &Rev);
+	std::cout << "GLFW : " << Major << ", " << Minor << ", " << Rev << std::endl;
+
+	// 3.4 以上
+#ifdef GLFW_PLATFORM
+	glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_WAYLAND);
+	glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_WIN32);
+#endif
+
 	//!< 初期化 (Initialize)
 	if (!glfwInit()) {
 		std::cerr << "glfwInit() failed" << std::endl;
 		exit(EXIT_FAILURE);
 	}
+
+	// 3.4 以上
+#ifdef GLFW_PLATFORM
+	const auto Platform = glfwGetPlatform();
+	std::cout << Platform << std::endl;
+#endif
 
 	//!< Vulkan サポートの有無 (Vulkan supported)
 	if (GLFW_FALSE == glfwVulkanSupported()) {
